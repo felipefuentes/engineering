@@ -1,0 +1,1857 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hub de Tecnologia - Ferramenta Executiva de Storytelling de Confiabilidade</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+        .star-filled { color: #facc15; }
+        .star-empty { color: #e2e8f0; }
+        .modal-overlay { animation: fadeIn 0.3s ease-in; }
+        .modal-panel { animation: scaleIn 0.3s ease-out; max-height: 85vh; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .edit-modal { animation: zoomIn 0.3s ease-out; }
+        @keyframes zoomIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        input, textarea, select { border: 1px solid #e2e8f0; border-radius: 0.375rem; padding: 0.5rem; font-family: inherit; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        .filter-panel { animation: slideDown 0.3s ease-out; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .tab-button { padding: 0.75rem 1rem; border: none; background: none; cursor: pointer; font-weight: 600; border-bottom: 3px solid transparent; transition: all 0.3s; }
+        .tab-button.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+        .tab-button:hover { color: #3b82f6; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .maturity-cell { cursor: pointer; transition: all 0.3s; border-radius: 0.5rem; padding: 1rem; text-align: center; font-weight: 600; border: 2px solid transparent; }
+        .maturity-cell:hover { transform: scale(1.05); border-color: #3b82f6; }
+        .maturity-0 { background-color: #fee2e2; color: #991b1b; }
+        .maturity-25 { background-color: #fecaca; color: #7f1d1d; }
+        .maturity-50 { background-color: #fbbf24; color: #78350f; }
+        .maturity-75 { background-color: #86efac; color: #15803d; }
+        .maturity-100 { background-color: #4ade80; color: #166534; }
+        .slider-container { display: flex; align-items: center; gap: 1rem; }
+        .slider-container input[type="range"] { flex: 1; padding: 0; height: 0.5rem; border: none; border-radius: 0.25rem; background: #e2e8f0; outline: none; -webkit-appearance: none; }
+        .slider-container input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: #3b82f6; cursor: pointer; }
+        .slider-container input[type="range"]::-moz-range-thumb { width: 1.5rem; height: 1.5rem; border-radius: 50%; background: #3b82f6; cursor: pointer; border: none; }
+        .incident-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
+        .incident-critical { background-color: #fee2e2; color: #991b1b; }
+        .incident-high { background-color: #fecaca; color: #7f1d1d; }
+        .incident-medium { background-color: #fbbf24; color: #78350f; }
+        .incident-low { background-color: #86efac; color: #15803d; }
+        .front-card { transition: all 0.3s; border: 2px solid #e2e8f0; }
+        .front-card:hover { border-color: #3b82f6; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15); }
+        .journey-card { transition: all 0.3s; border: 2px solid #e2e8f0; }
+        .journey-card:hover { border-color: #3b82f6; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15); }
+        .incident-counter { cursor: pointer; transition: all 0.3s; }
+        .incident-counter:hover { transform: scale(1.05); }
+        .tag { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-size: 0.75rem; font-weight: 600; margin-right: 0.5rem; margin-bottom: 0.5rem; }
+        .tag-pillar { background-color: #dbeafe; color: #1e40af; }
+        .tag-attribute { background-color: #f0fdf4; color: #166534; }
+        .tag-mttr { background-color: #fef3c7; color: #92400e; }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-slate-100">
+    <div id="app"></div>
+
+    <script>
+        // Dados padrão das Frentes de Engenharia
+        const defaultFronts = [
+            {
+                id: "1",
+                name: "Gestão de Incidentes",
+                ownerName: "Carlos Silva",
+                ownerInitials: "CS",
+                maturityLevel: 4,
+                status: "in-progress",
+                mainObjectives: ["Reduzir MTTR em 30%", "Implementar alertas automáticos", "Criar playbooks de resposta"],
+                currentActions: ["Implementação de sistema de ticketing", "Treinamento de equipe", "Documentação de processos"],
+                futureActions: ["Automação de resposta", "Integração com ferramentas de IA", "Análise preditiva de incidentes"],
+                attentionPoints: ["Falta de automação em alertas", "Documentação incompleta"],
+                maturityLevels: [
+                    { level: 1, description: "Reativo - Sem processos formalizados", expectations: [{ description: "Registro manual de incidentes", status: "done" }, { description: "Comunicação ad-hoc", status: "done" }], problemsAvoided: [], evolutionIndicators: ["Tempo de resposta > 4 horas"] },
+                    { level: 2, description: "Processual - Processos básicos definidos", expectations: [{ description: "Processo de escalação definido", status: "done" }, { description: "Documentação básica", status: "in-progress" }], problemsAvoided: ["Confusão na escalação"], evolutionIndicators: ["MTTR reduzido para 2 horas"] },
+                    { level: 3, description: "Gerenciado - Processos monitorados", expectations: [{ description: "Métricas de incidente rastreadas", status: "done" }, { description: "Alertas automáticos", status: "in-progress" }], problemsAvoided: ["Perda de dados de incidentes", "Falta de rastreabilidade"], evolutionIndicators: ["MTTR < 1 hora", "Resolução em 1º nível > 60%"] },
+                    { level: 4, description: "Otimizado - Processos automatizados", expectations: [{ description: "Automação de resposta", status: "in-progress" }, { description: "Análise de causa raiz automatizada", status: "not-done" }], problemsAvoided: ["Erros humanos", "Atrasos na resposta"], evolutionIndicators: ["MTTR < 30 min", "Automação > 70%"] },
+                    { level: 5, description: "Inovador - Contínua melhoria", expectations: [{ description: "Previsão de incidentes", status: "not-done" }, { description: "Auto-cicatrização", status: "not-done" }], problemsAvoided: ["Incidentes recorrentes"], evolutionIndicators: ["Redução de 90% em incidentes", "MTTR < 5 min"] }
+                ]
+            },
+            {
+                id: "2",
+                name: "Gestão de Observabilidade",
+                ownerName: "Ana Costa",
+                ownerInitials: "AC",
+                maturityLevel: 3,
+                status: "in-progress",
+                mainObjectives: ["Visibilidade completa dos sistemas", "Detecção proativa de anomalias", "Reduzir tempo de diagnóstico"],
+                currentActions: ["Implementação de APM", "Centralização de logs", "Criação de dashboards"],
+                futureActions: ["Machine learning para anomalias", "Correlação automática de eventos", "Alertas inteligentes"],
+                attentionPoints: ["Retenção de dados cara", "Falta de padronização em logs"],
+                maturityLevels: [
+                    { level: 1, description: "Reativo - Logs básicos", expectations: [{ description: "Logs em arquivo", status: "done" }, { description: "Monitoramento manual", status: "done" }], problemsAvoided: [], evolutionIndicators: ["Tempo de diagnóstico > 4 horas"] },
+                    { level: 2, description: "Processual - Centralização iniciada", expectations: [{ description: "Logs centralizados", status: "done" }, { description: "Métricas básicas", status: "in-progress" }], problemsAvoided: ["Perda de logs"], evolutionIndicators: ["Tempo de diagnóstico 2-3 horas"] },
+                    { level: 3, description: "Gerenciado - Observabilidade completa", expectations: [{ description: "Traces distribuídos", status: "done" }, { description: "Dashboards executivos", status: "done" }], problemsAvoided: ["Perda de contexto", "Diagnóstico lento"], evolutionIndicators: ["Tempo de diagnóstico < 30 min", "Cobertura > 80%"] },
+                    { level: 4, description: "Otimizado - Análise automática", expectations: [{ description: "Detecção de anomalias", status: "in-progress" }, { description: "Alertas inteligentes", status: "not-done" }], problemsAvoided: ["Alertas falsos"], evolutionIndicators: ["Tempo de diagnóstico < 10 min"] },
+                    { level: 5, description: "Inovador - Previsão e otimização", expectations: [{ description: "Previsão de problemas", status: "not-done" }, { description: "Otimização automática", status: "not-done" }], problemsAvoided: ["Incidentes antes de ocorrer"], evolutionIndicators: ["Prevenção de 80% dos problemas"] }
+                ]
+            },
+            {
+                id: "3",
+                name: "Gestão de Riscos",
+                ownerName: "Roberto Mendes",
+                ownerInitials: "RM",
+                maturityLevel: 2,
+                status: "at-risk",
+                mainObjectives: ["Identificar riscos técnicos", "Priorizar mitigação", "Rastrear ações de risco"],
+                currentActions: ["Registro de riscos iniciado", "Reuniões trimestrais de risco"],
+                futureActions: ["Análise quantitativa de risco", "Monitoramento contínuo", "Integração com roadmap"],
+                attentionPoints: ["Falta de propriedade clara", "Processo informal"],
+                maturityLevels: [
+                    { level: 1, description: "Reativo - Sem gestão formal", expectations: [{ description: "Identificação ad-hoc", status: "done" }], problemsAvoided: [], evolutionIndicators: ["Riscos não documentados"] },
+                    { level: 2, description: "Processual - Registro iniciado", expectations: [{ description: "Registro de riscos", status: "done" }, { description: "Revisão periódica", status: "in-progress" }], problemsAvoided: ["Perda de histórico de risco"], evolutionIndicators: ["Cobertura de riscos > 50%"] },
+                    { level: 3, description: "Gerenciado - Processo formalizado", expectations: [{ description: "Matriz de risco", status: "not-done" }, { description: "Planos de mitigação", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 4, description: "Otimizado - Análise quantitativa", expectations: [{ description: "Análise de impacto", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 5, description: "Inovador - Gestão preditiva", expectations: [{ description: "Previsão de riscos", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] }
+                ]
+            },
+            {
+                id: "4",
+                name: "Gestão de Alertas",
+                ownerName: "Fernanda Oliveira",
+                ownerInitials: "FO",
+                maturityLevel: 3,
+                status: "in-progress",
+                mainObjectives: ["Reduzir ruído de alertas", "Melhorar precisão", "Implementar correlação"],
+                currentActions: ["Implementação de plataforma de alertas", "Definição de thresholds", "Integração com canais de notificação"],
+                futureActions: ["Machine learning para detecção de anomalias", "Agrupamento inteligente de alertas", "Análise de padrões"],
+                attentionPoints: ["Muitos alertas falsos", "Falta de contexto nos alertas"],
+                maturityLevels: [
+                    { level: 1, description: "Reativo - Alertas manuais", expectations: [{ description: "Alertas por email", status: "done" }], problemsAvoided: [], evolutionIndicators: ["Tempo de notificação > 2 horas"] },
+                    { level: 2, description: "Processual - Plataforma básica", expectations: [{ description: "Plataforma centralizada", status: "done" }, { description: "Múltiplos canais", status: "in-progress" }], problemsAvoided: ["Perda de alertas"], evolutionIndicators: ["Tempo de notificação < 30 min"] },
+                    { level: 3, description: "Gerenciado - Inteligência básica", expectations: [{ description: "Correlação de alertas", status: "done" }, { description: "Supressão de duplicatas", status: "done" }], problemsAvoided: ["Ruído de alertas"], evolutionIndicators: ["Redução de 40% em alertas", "Tempo < 5 min"] },
+                    { level: 4, description: "Otimizado - ML integrado", expectations: [{ description: "Detecção de anomalias", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 5, description: "Inovador - Previsão inteligente", expectations: [{ description: "Alertas preditivos", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] }
+                ]
+            },
+            {
+                id: "5",
+                name: "Gestão de Indicadores de Segurança",
+                ownerName: "Marcelo Santos",
+                ownerInitials: "MS",
+                maturityLevel: 2,
+                status: "at-risk",
+                mainObjectives: ["Implementar SIEM", "Rastrear vulnerabilidades", "Conformidade regulatória"],
+                currentActions: ["Coleta de logs de segurança", "Análise de vulnerabilidades"],
+                futureActions: ["Implementação de SIEM", "Automação de resposta", "Conformidade com LGPD"],
+                attentionPoints: ["Falta de automação", "Recursos limitados"],
+                maturityLevels: [
+                    { level: 1, description: "Reativo - Sem monitoramento", expectations: [{ description: "Análise manual", status: "done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 2, description: "Processual - Coleta iniciada", expectations: [{ description: "Coleta de logs", status: "done" }, { description: "Análise básica", status: "in-progress" }], problemsAvoided: ["Perda de evidência"], evolutionIndicators: ["Cobertura > 50%"] },
+                    { level: 3, description: "Gerenciado - SIEM implementado", expectations: [{ description: "SIEM operacional", status: "not-done" }, { description: "Alertas de segurança", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 4, description: "Otimizado - Automação", expectations: [{ description: "Resposta automática", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 5, description: "Inovador - Prevenção inteligente", expectations: [{ description: "Prevenção de ataques", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] }
+                ]
+            },
+            {
+                id: "6",
+                name: "Gestão de Infraestrutura",
+                ownerName: "Lucas Ferreira",
+                ownerInitials: "LF",
+                maturityLevel: 4,
+                status: "achieved",
+                mainObjectives: ["Infraestrutura como código", "Escalabilidade automática", "Disaster recovery"],
+                currentActions: ["Terraform para IaC", "Kubernetes em produção", "Backup automático"],
+                futureActions: ["Multi-cloud strategy", "Edge computing", "Otimização de custos"],
+                attentionPoints: [],
+                maturityLevels: [
+                    { level: 1, description: "Reativo - Manual", expectations: [{ description: "Provisionamento manual", status: "done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 2, description: "Processual - Scripts básicos", expectations: [{ description: "Scripts de automação", status: "done" }], problemsAvoided: ["Erros humanos"], evolutionIndicators: [] },
+                    { level: 3, description: "Gerenciado - IaC parcial", expectations: [{ description: "Terraform", status: "done" }, { description: "Versionamento", status: "done" }], problemsAvoided: ["Drift de configuração"], evolutionIndicators: ["Cobertura > 80%"] },
+                    { level: 4, description: "Otimizado - IaC completo", expectations: [{ description: "100% IaC", status: "done" }, { description: "GitOps", status: "done" }], problemsAvoided: ["Inconsistências"], evolutionIndicators: ["Tempo de deploy < 5 min"] },
+                    { level: 5, description: "Inovador - Inteligente", expectations: [{ description: "Auto-scaling inteligente", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] }
+                ]
+            },
+            {
+                id: "7",
+                name: "Gestão de Qualidade de Testes",
+                ownerName: "Patricia Gomes",
+                ownerInitials: "PG",
+                maturityLevel: 3,
+                status: "in-progress",
+                mainObjectives: ["Aumentar cobertura de testes", "Testes automatizados", "Qualidade de código"],
+                currentActions: ["Implementação de testes unitários", "Testes de integração", "CI/CD pipeline"],
+                futureActions: ["Testes de performance", "Testes de segurança", "Análise de cobertura"],
+                attentionPoints: ["Cobertura ainda baixa", "Testes frágeis"],
+                maturityLevels: [
+                    { level: 1, description: "Reativo - Testes manuais", expectations: [{ description: "Testes manuais", status: "done" }], problemsAvoided: [], evolutionIndicators: ["Cobertura < 20%"] },
+                    { level: 2, description: "Processual - Testes unitários", expectations: [{ description: "Testes unitários", status: "done" }, { description: "Cobertura básica", status: "in-progress" }], problemsAvoided: ["Regressões"], evolutionIndicators: ["Cobertura 20-40%"] },
+                    { level: 3, description: "Gerenciado - Testes integrados", expectations: [{ description: "Testes de integração", status: "done" }, { description: "CI/CD", status: "done" }], problemsAvoided: ["Bugs em produção"], evolutionIndicators: ["Cobertura > 60%", "Build time < 10 min"] },
+                    { level: 4, description: "Otimizado - Testes avançados", expectations: [{ description: "Testes de performance", status: "not-done" }, { description: "Testes de segurança", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 5, description: "Inovador - Testes inteligentes", expectations: [{ description: "Testes com IA", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] }
+                ]
+            },
+            {
+                id: "8",
+                name: "Gestão de SRE",
+                ownerName: "Gabriel Costa",
+                ownerInitials: "GC",
+                maturityLevel: 3,
+                status: "in-progress",
+                mainObjectives: ["Implementar SLO/SLI", "Error budget", "Cultura de confiabilidade"],
+                currentActions: ["Definição de SLO", "Implementação de SLI", "Runbooks"],
+                futureActions: ["Error budget tracking", "Chaos engineering", "Treinamento contínuo"],
+                attentionPoints: ["Falta de alinhamento com produto", "Recursos limitados"],
+                maturityLevels: [
+                    { level: 1, description: "Reativo - Sem SRE", expectations: [{ description: "Resposta a incidentes", status: "done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 2, description: "Processual - SRE iniciado", expectations: [{ description: "Runbooks", status: "done" }, { description: "On-call", status: "in-progress" }], problemsAvoided: ["Resposta desorganizada"], evolutionIndicators: ["MTTR reduzido"] },
+                    { level: 3, description: "Gerenciado - SRE estruturado", expectations: [{ description: "SLO definido", status: "done" }, { description: "SLI implementado", status: "done" }], problemsAvoided: ["Expectativas não alinhadas"], evolutionIndicators: ["Uptime > 99.5%", "Error budget tracking"] },
+                    { level: 4, description: "Otimizado - SRE avançado", expectations: [{ description: "Chaos engineering", status: "not-done" }, { description: "Automação", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 5, description: "Inovador - SRE inteligente", expectations: [{ description: "Previsão de falhas", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] }
+                ]
+            },
+            {
+                id: "9",
+                name: "Gestão de Jornadas",
+                ownerName: "Beatriz Lima",
+                ownerInitials: "BL",
+                maturityLevel: 2,
+                status: "in-progress",
+                mainObjectives: ["Mapear jornadas críticas", "Monitorar experiência", "Melhorar satisfação"],
+                currentActions: ["Identificação de jornadas", "Instrumentação básica"],
+                futureActions: ["Monitoramento de experiência", "Análise de impacto", "Otimização contínua"],
+                attentionPoints: ["Falta de visibilidade", "Dados incompletos"],
+                maturityLevels: [
+                    { level: 1, description: "Reativo - Sem mapeamento", expectations: [{ description: "Conhecimento informal", status: "done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 2, description: "Processual - Mapeamento iniciado", expectations: [{ description: "Jornadas identificadas", status: "done" }, { description: "Instrumentação", status: "in-progress" }], problemsAvoided: ["Falta de contexto"], evolutionIndicators: ["Cobertura > 50%"] },
+                    { level: 3, description: "Gerenciado - Monitoramento", expectations: [{ description: "Monitoramento contínuo", status: "not-done" }, { description: "Dashboards", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 4, description: "Otimizado - Análise avançada", expectations: [{ description: "Análise de impacto", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 5, description: "Inovador - Experiência inteligente", expectations: [{ description: "Otimização automática", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] }
+                ]
+            },
+            {
+                id: "10",
+                name: "Gestão de Contingência",
+                ownerName: "Ricardo Alves",
+                ownerInitials: "RA",
+                maturityLevel: 2,
+                status: "at-risk",
+                mainObjectives: ["Planos de contingência", "Testes de DR", "Recuperação rápida"],
+                currentActions: ["Documentação de planos", "Backups"],
+                futureActions: ["Testes de DR regulares", "Automação de failover", "Simulações"],
+                attentionPoints: ["Planos desatualizados", "Falta de testes"],
+                maturityLevels: [
+                    { level: 1, description: "Reativo - Sem plano", expectations: [{ description: "Resposta ad-hoc", status: "done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 2, description: "Processual - Plano básico", expectations: [{ description: "Plano documentado", status: "done" }, { description: "Backups", status: "done" }], problemsAvoided: ["Perda de dados"], evolutionIndicators: ["RTO > 4 horas"] },
+                    { level: 3, description: "Gerenciado - Testes regulares", expectations: [{ description: "Testes de DR", status: "not-done" }, { description: "Documentação atualizada", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 4, description: "Otimizado - Automação", expectations: [{ description: "Failover automático", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 5, description: "Inovador - Resiliente", expectations: [{ description: "Zero downtime", status: "not-done" }], problemsAvoided: [], evolutionIndicators: [] }
+                ]
+            }
+        ];
+
+        // Dados padrão das Jornadas
+        const defaultJourneys = [
+            {
+                id: "j1",
+                name: "Autenticação de Usuário",
+                acronym: "AUTH",
+                status: "active",
+                events: [
+                    {
+                        id: "inc1",
+                        category: "Incidentes",
+                        incidentNumber: "INC-2024-001",
+                        date: "2024-01-15T14:30:00",
+                        mttr: "2h 15min",
+                        description: "Falha na autenticação de usuários",
+                        affectedJourney: "j1",
+                        relatedRisk: "Indisponibilidade do serviço",
+                        origin: "Infraestrutura",
+                        prevention: "Implementar health checks mais frequentes",
+                        lessons: "Necessário melhorar monitoramento de banco de dados",
+                        pillar: "availability",
+                        attributes: ["Observability", "Alertas"]
+                    }
+                ],
+                maturity: {
+                    availability: {
+                        "Arquitetura Escalável": 80,
+                        "Self Healing": 60,
+                        "Auto Scaling": 75,
+                        "Alertas": 85,
+                        "Observability": 70,
+                        "Documentação": 65,
+                        "Retentativa Simples": 90,
+                        "Retentativa Exponencial": 75,
+                        "Rate Limit": 80,
+                        "Fallback": 70,
+                        "Disponibilidade Multicloud": 50,
+                        "Há Contingência": 60
+                    },
+                    quality: {
+                        "Testes Unitários": 85,
+                        "Testes Integração": 80,
+                        "Testes Mutação": 60,
+                        "Testes E2E": 75,
+                        "Testes Estresse": 70,
+                        "Teste Auto CI": 90,
+                        "Deploy Canary": 80,
+                        "Deploy Blue e Green": 75,
+                        "Segregação Erros Negocio": 85,
+                        "Segregação Erros Aplicação": 80,
+                        "Feature Toggle": 70
+                    },
+                    security: {
+                        "Criptografia de Dados em Trânsito": 95,
+                        "Criptografia de Dados em Repouso": 90,
+                        "Autenticação Multifator": 85,
+                        "Validação de Entrada": 90,
+                        "Proteção contra OWASP Top 10": 80,
+                        "Auditoria de Acesso": 85,
+                        "Gerenciamento de Secrets": 80,
+                        "Testes de Segurança": 70,
+                        "Conformidade Regulatória": 75,
+                        "Rotação de Credenciais": 80,
+                        "Detecção de Anomalias": 60,
+                        "Isolamento de Rede": 85
+                    },
+                    performance: {
+                        "Otimização de Queries": 80,
+                        "Cache Strategy": 85,
+                        "CDN Utilization": 75,
+                        "Compressão de Dados": 90,
+                        "Lazy Loading": 80,
+                        "Minificação de Assets": 85,
+                        "Database Indexing": 85,
+                        "Connection Pooling": 80,
+                        "Monitoring de Performance": 75,
+                        "Load Testing": 70,
+                        "Profiling de Código": 65,
+                        "Otimização de Memória": 75
+                    }
+                }
+            },
+            {
+                id: "j2",
+                name: "Processamento de Pagamentos",
+                acronym: "PAY",
+                status: "active",
+                events: [
+                    {
+                        id: "inc2",
+                        category: "Incidentes",
+                        incidentNumber: "INC-2024-002",
+                        date: "2024-01-20T10:00:00",
+                        mttr: "45min",
+                        description: "Timeout em processamento de pagamento",
+                        affectedJourney: "j2",
+                        relatedRisk: "Perda de receita",
+                        origin: "Aplicação",
+                        prevention: "Aumentar timeout e implementar circuit breaker",
+                        lessons: "Necessário testes de carga mais realistas",
+                        pillar: "performance",
+                        attributes: ["Connection Pooling", "Load Testing"]
+                    },
+                    {
+                        id: "inc3",
+                        category: "Incidentes",
+                        incidentNumber: "INC-2024-003",
+                        date: "2024-01-25T16:20:00",
+                        mttr: "1h 30min",
+                        description: "Falha de segurança em validação de cartão",
+                        affectedJourney: "j2",
+                        relatedRisk: "Comprometimento de dados de clientes",
+                        origin: "Mudança",
+                        prevention: "Implementar validação mais rigorosa",
+                        lessons: "Código review insuficiente antes do deploy",
+                        pillar: "security",
+                        attributes: ["Validação de Entrada", "Testes de Segurança"]
+                    }
+                ],
+                maturity: {
+                    availability: {
+                        "Arquitetura Escalável": 85,
+                        "Self Healing": 70,
+                        "Auto Scaling": 80,
+                        "Alertas": 90,
+                        "Observability": 85,
+                        "Documentação": 80,
+                        "Retentativa Simples": 95,
+                        "Retentativa Exponencial": 85,
+                        "Rate Limit": 90,
+                        "Fallback": 85,
+                        "Disponibilidade Multicloud": 75,
+                        "Há Contingência": 80
+                    },
+                    quality: {
+                        "Testes Unitários": 90,
+                        "Testes Integração": 85,
+                        "Testes Mutação": 75,
+                        "Testes E2E": 85,
+                        "Testes Estresse": 80,
+                        "Teste Auto CI": 95,
+                        "Deploy Canary": 85,
+                        "Deploy Blue e Green": 85,
+                        "Segregação Erros Negocio": 95,
+                        "Segregação Erros Aplicação": 90,
+                        "Feature Toggle": 80
+                    },
+                    security: {
+                        "Criptografia de Dados em Trânsito": 100,
+                        "Criptografia de Dados em Repouso": 100,
+                        "Autenticação Multifator": 90,
+                        "Validação de Entrada": 95,
+                        "Proteção contra OWASP Top 10": 95,
+                        "Auditoria de Acesso": 95,
+                        "Gerenciamento de Secrets": 95,
+                        "Testes de Segurança": 90,
+                        "Conformidade Regulatória": 95,
+                        "Rotação de Credenciais": 90,
+                        "Detecção de Anomalias": 85,
+                        "Isolamento de Rede": 95
+                    },
+                    performance: {
+                        "Otimização de Queries": 85,
+                        "Cache Strategy": 90,
+                        "CDN Utilization": 80,
+                        "Compressão de Dados": 95,
+                        "Lazy Loading": 85,
+                        "Minificação de Assets": 90,
+                        "Database Indexing": 90,
+                        "Connection Pooling": 85,
+                        "Monitoring de Performance": 85,
+                        "Load Testing": 80,
+                        "Profiling de Código": 75,
+                        "Otimização de Memória": 80
+                    }
+                }
+            }
+        ];
+
+        const pillarAttributes = {
+            availability: {
+                "Arquitetura Escalável": "Capacidade de crescer horizontalmente",
+                "Self Healing": "Recuperação automática de falhas",
+                "Auto Scaling": "Ajuste automático de recursos",
+                "Alertas": "Sistema de alertas proativo",
+                "Observability": "Visibilidade completa do sistema",
+                "Documentação": "Documentação técnica atualizada",
+                "Retentativa Simples": "Retry com intervalo fixo",
+                "Retentativa Exponencial": "Retry com backoff exponencial",
+                "Rate Limit": "Proteção contra sobrecarga",
+                "Fallback": "Plano B quando principal falha",
+                "Disponibilidade Multicloud": "Distribuição em múltiplas clouds",
+                "Há Contingência": "Plano de contingência documentado"
+            },
+            quality: {
+                "Testes Unitários": "Cobertura de testes unitários",
+                "Testes Integração": "Testes de integração entre componentes",
+                "Testes Mutação": "Testes de mutação de código",
+                "Testes E2E": "Testes end-to-end",
+                "Testes Estresse": "Testes sob carga extrema",
+                "Teste Auto CI": "Automação em CI/CD",
+                "Deploy Canary": "Deploy canário implementado",
+                "Deploy Blue e Green": "Deploy blue-green disponível",
+                "Segregação Erros Negocio": "Tratamento de erros de negócio",
+                "Segregação Erros Aplicação": "Tratamento de erros de aplicação",
+                "Feature Toggle": "Feature flags implementadas"
+            },
+            security: {
+                "Criptografia de Dados em Trânsito": "Dados criptografados em transmissão",
+                "Criptografia de Dados em Repouso": "Dados criptografados armazenados",
+                "Autenticação Multifator": "MFA implementado",
+                "Validação de Entrada": "Validação rigorosa de inputs",
+                "Proteção contra OWASP Top 10": "Proteção contra vulnerabilidades OWASP",
+                "Auditoria de Acesso": "Logs de auditoria de acesso",
+                "Gerenciamento de Secrets": "Gestão segura de secrets",
+                "Testes de Segurança": "Testes de segurança regulares",
+                "Conformidade Regulatória": "Conformidade com regulamentações",
+                "Rotação de Credenciais": "Rotação automática de credenciais",
+                "Detecção de Anomalias": "Detecção de comportamentos anômalos",
+                "Isolamento de Rede": "Isolamento de rede implementado"
+            },
+            performance: {
+                "Otimização de Queries": "Queries otimizadas no banco de dados",
+                "Cache Strategy": "Estratégia de cache implementada",
+                "CDN Utilization": "Utilização de CDN",
+                "Compressão de Dados": "Compressão de dados em trânsito",
+                "Lazy Loading": "Carregamento lazy implementado",
+                "Minificação de Assets": "Assets minificados",
+                "Database Indexing": "Índices de banco de dados otimizados",
+                "Connection Pooling": "Pool de conexões configurado",
+                "Monitoring de Performance": "Monitoramento de performance",
+                "Load Testing": "Testes de carga realizados",
+                "Profiling de Código": "Profiling de código realizado",
+                "Otimização de Memória": "Otimização de uso de memória"
+            }
+        };
+
+        const statusConfig = {
+            "at-risk": { label: "Risco", bgColor: "bg-red-100", textColor: "text-red-800" },
+            "in-progress": { label: "Em Progresso", bgColor: "bg-blue-100", textColor: "text-blue-800" },
+            "canceled": { label: "Cancelado", bgColor: "bg-gray-100", textColor: "text-gray-800" },
+            "achieved": { label: "Atingido", bgColor: "bg-green-100", textColor: "text-green-800" }
+        };
+
+        const journeyStatusConfig = {
+            "active": { label: "Ativa", bgColor: "bg-green-100", textColor: "text-green-800" },
+            "inactive": { label: "Inativa", bgColor: "bg-gray-100", textColor: "text-gray-800" },
+            "discovery": { label: "Em Discovery", bgColor: "bg-yellow-100", textColor: "text-yellow-800" }
+        };
+
+        const eventCategories = ["Incidentes", "Requisições", "Problemas", "Riscos"];
+        const incidentOrigins = ["Mudança", "Projetos", "Infraestrutura", "Redes", "Parceiro", "Aplicação", "Banco de Dados"];
+
+        let fronts = JSON.parse(localStorage.getItem('fronts')) || JSON.parse(JSON.stringify(defaultFronts));
+        let journeys = JSON.parse(localStorage.getItem('journeys')) || JSON.parse(JSON.stringify(defaultJourneys));
+        let currentPage = 'fronts';
+        let selectedFrontId = null;
+        let expandedLevels = {};
+        let editingFrontId = null;
+        let creatingNewFront = false;
+        let filtersExpanded = false;
+        let newFrontTab = 'basic';
+        let editFrontTab = 'basic';
+        let editingJourneyId = null;
+        let creatingNewJourney = false;
+        let selectedPillar = null;
+        let selectedAttribute = null;
+        let filters = {
+            status: [],
+            maturityLevel: [],
+            owner: [],
+            name: ''
+        };
+        let showEventModal = false;
+        let selectedEventJourneyId = null;
+        let selectedEventCategory = null;
+        let showIncidentForm = false;
+        let showIncidentOverview = false;
+        let incidentOverviewJourneyId = null;
+
+        function saveFronts() {
+            localStorage.setItem('fronts', JSON.stringify(fronts));
+        }
+
+        function saveJourneys() {
+            localStorage.setItem('journeys', JSON.stringify(journeys));
+        }
+
+        function countIncidents(journeyId) {
+            const journey = journeys.find(j => j.id === journeyId);
+            if (!journey || !journey.events) return 0;
+            return journey.events.filter(e => e.category === 'Incidentes').length;
+        }
+
+        function openIncidentOverview(journeyId) {
+            incidentOverviewJourneyId = journeyId;
+            showIncidentOverview = true;
+            render();
+        }
+
+        function closeIncidentOverview() {
+            showIncidentOverview = false;
+            incidentOverviewJourneyId = null;
+            render();
+        }
+
+        function openEventModal(journeyId) {
+            selectedEventJourneyId = journeyId;
+            showEventModal = true;
+            selectedEventCategory = null;
+            showIncidentForm = false;
+            render();
+        }
+
+        function closeEventModal() {
+            showEventModal = false;
+            selectedEventJourneyId = null;
+            selectedEventCategory = null;
+            showIncidentForm = false;
+            render();
+        }
+
+        function selectEventCategory(category) {
+            selectedEventCategory = category;
+            if (category === 'Incidentes') {
+                showIncidentForm = true;
+            }
+            render();
+        }
+
+        function saveIncident() {
+            const incidentNumber = document.getElementById('incident-number').value.trim();
+            const incidentDate = document.getElementById('incident-date').value;
+            const mttr = document.getElementById('incident-mttr').value.trim();
+            const description = document.getElementById('incident-description').value.trim();
+            const affectedJourney = document.getElementById('incident-journey').value;
+            const relatedRisk = document.getElementById('incident-risk').value.trim();
+            const origin = document.getElementById('incident-origin').value;
+            const prevention = document.getElementById('incident-prevention').value.trim();
+            const lessons = document.getElementById('incident-lessons').value.trim();
+            const pillar = document.getElementById('incident-pillar').value;
+            const attributes = Array.from(document.querySelectorAll('input[name="incident-attributes"]:checked')).map(el => el.value);
+
+            if (!incidentNumber || !incidentDate || !mttr || !description) {
+                alert('Preencha todos os campos obrigatórios!');
+                return;
+            }
+
+            const journey = journeys.find(j => j.id === selectedEventJourneyId);
+            if (!journey) return;
+
+            const newIncident = {
+                id: 'inc' + Date.now(),
+                category: 'Incidentes',
+                incidentNumber: incidentNumber,
+                date: incidentDate,
+                mttr: mttr,
+                description: description,
+                affectedJourney: affectedJourney,
+                relatedRisk: relatedRisk,
+                origin: origin,
+                prevention: prevention,
+                lessons: lessons,
+                pillar: pillar,
+                attributes: attributes,
+                createdAt: new Date().toISOString()
+            };
+
+            journey.events.push(newIncident);
+            saveJourneys();
+            closeEventModal();
+        }
+
+        function deleteEvent(journeyId, eventId) {
+            if (confirm('Tem certeza que deseja deletar este evento?')) {
+                const journey = journeys.find(j => j.id === journeyId);
+                if (journey) {
+                    journey.events = journey.events.filter(e => e.id !== eventId);
+                    saveJourneys();
+                    render();
+                }
+            }
+        }
+
+        function calculatePillarMaturity(journey, pillar) {
+            const attributes = journey.maturity[pillar];
+            const values = Object.values(attributes);
+            return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+        }
+
+        function getMaturityColor(value) {
+            if (value < 25) return 'maturity-0';
+            if (value < 50) return 'maturity-25';
+            if (value < 75) return 'maturity-50';
+            if (value < 100) return 'maturity-75';
+            return 'maturity-100';
+        }
+
+        function openDetailModalJourney(journeyId, pillar, attribute) {
+            selectedPillar = pillar;
+            selectedAttribute = attribute;
+            editingJourneyId = journeyId;
+            render();
+        }
+
+        function closeDetailModalJourney() {
+            selectedPillar = null;
+            selectedAttribute = null;
+            editingJourneyId = null;
+            render();
+        }
+
+        function updateAttributeValue(journeyId, pillar, attribute, value) {
+            const journey = journeys.find(j => j.id === journeyId);
+            if (journey) {
+                journey.maturity[pillar][attribute] = parseInt(value);
+                saveJourneys();
+                render();
+            }
+        }
+
+        function openNewJourneyModal() {
+            creatingNewJourney = true;
+            render();
+        }
+
+        function closeNewJourneyModal() {
+            creatingNewJourney = false;
+            render();
+        }
+
+        function saveNewJourney() {
+            const name = document.getElementById('new-journey-name').value.trim();
+            const acronym = document.getElementById('new-journey-acronym').value.trim();
+            const status = document.getElementById('new-journey-status').value;
+            if (!name || !acronym) {
+                alert('Nome e Sigla são obrigatórios!');
+                return;
+            }
+            const newJourney = {
+                id: 'j' + Date.now(),
+                name: name,
+                acronym: acronym.toUpperCase(),
+                status: status,
+                events: [],
+                maturity: {
+                    availability: {},
+                    quality: {},
+                    security: {},
+                    performance: {}
+                }
+            };
+            Object.keys(pillarAttributes).forEach(pillar => {
+                Object.keys(pillarAttributes[pillar]).forEach(attr => {
+                    newJourney.maturity[pillar][attr] = 0;
+                });
+            });
+            journeys.push(newJourney);
+            saveJourneys();
+            closeNewJourneyModal();
+        }
+
+        function deleteJourney(journeyId) {
+            if (confirm('Tem certeza que deseja deletar esta jornada?')) {
+                journeys = journeys.filter(j => j.id !== journeyId);
+                saveJourneys();
+                render();
+            }
+        }
+
+        function toggleFilter() {
+            filtersExpanded = !filtersExpanded;
+            render();
+        }
+
+        function updateFilterStatus(status) {
+            const idx = filters.status.indexOf(status);
+            if (idx > -1) {
+                filters.status.splice(idx, 1);
+            } else {
+                filters.status.push(status);
+            }
+            render();
+        }
+
+        function updateFilterMaturityLevel(level) {
+            const idx = filters.maturityLevel.indexOf(level);
+            if (idx > -1) {
+                filters.maturityLevel.splice(idx, 1);
+            } else {
+                filters.maturityLevel.push(level);
+            }
+            render();
+        }
+
+        function updateFilterOwner(owner) {
+            const idx = filters.owner.indexOf(owner);
+            if (idx > -1) {
+                filters.owner.splice(idx, 1);
+            } else {
+                filters.owner.push(owner);
+            }
+            render();
+        }
+
+        function updateFilterName(name) {
+            filters.name = name;
+            render();
+        }
+
+        function clearFilters() {
+            filters = { status: [], maturityLevel: [], owner: [], name: '' };
+            render();
+        }
+
+        function getFilteredFronts() {
+            return fronts.filter(front => {
+                if (filters.status.length > 0 && !filters.status.includes(front.status)) return false;
+                if (filters.maturityLevel.length > 0 && !filters.maturityLevel.includes(front.maturityLevel)) return false;
+                if (filters.owner.length > 0 && !filters.owner.includes(front.ownerName)) return false;
+                if (filters.name && !front.name.toLowerCase().includes(filters.name.toLowerCase())) return false;
+                return true;
+            });
+        }
+
+        function openFrontDetail(frontId) {
+            selectedFrontId = frontId;
+            render();
+        }
+
+        function closeFrontDetail() {
+            selectedFrontId = null;
+            render();
+        }
+
+        function toggleLevel(level) {
+            expandedLevels[level] = !expandedLevels[level];
+            render();
+        }
+
+        function openEditFront(frontId) {
+            editingFrontId = frontId;
+            editFrontTab = 'basic';
+            render();
+        }
+
+        function closeEditFront() {
+            editingFrontId = null;
+            render();
+        }
+
+        function openNewFront() {
+            creatingNewFront = true;
+            newFrontTab = 'basic';
+            render();
+        }
+
+        function closeNewFront() {
+            creatingNewFront = false;
+            render();
+        }
+
+        function saveEditFront() {
+            const front = fronts.find(f => f.id === editingFrontId);
+            if (!front) return;
+
+            front.name = document.getElementById('edit-front-name').value.trim();
+            front.ownerName = document.getElementById('edit-front-owner').value.trim();
+            front.ownerInitials = front.ownerName.split(' ').map(n => n[0]).join('').toUpperCase();
+            front.maturityLevel = parseInt(document.getElementById('edit-front-maturity').value);
+            front.status = document.getElementById('edit-front-status').value;
+
+            const objectivesText = document.getElementById('edit-front-objectives').value.trim();
+            front.mainObjectives = objectivesText.split('\n').filter(o => o.trim());
+
+            const currentActionsText = document.getElementById('edit-front-current-actions').value.trim();
+            front.currentActions = currentActionsText.split('\n').filter(a => a.trim());
+
+            const futureActionsText = document.getElementById('edit-front-future-actions').value.trim();
+            front.futureActions = futureActionsText.split('\n').filter(a => a.trim());
+
+            const attentionPointsText = document.getElementById('edit-front-attention-points').value.trim();
+            front.attentionPoints = attentionPointsText.split('\n').filter(p => p.trim());
+
+            saveFronts();
+            closeEditFront();
+        }
+
+        function saveNewFront() {
+            const name = document.getElementById('new-front-name').value.trim();
+            const ownerName = document.getElementById('new-front-owner').value.trim();
+            const maturityLevel = parseInt(document.getElementById('new-front-maturity').value);
+            const status = document.getElementById('new-front-status').value;
+
+            if (!name || !ownerName) {
+                alert('Nome e Owner são obrigatórios!');
+                return;
+            }
+
+            const objectivesText = document.getElementById('new-front-objectives').value.trim();
+            const mainObjectives = objectivesText.split('\n').filter(o => o.trim());
+
+            const currentActionsText = document.getElementById('new-front-current-actions').value.trim();
+            const currentActions = currentActionsText.split('\n').filter(a => a.trim());
+
+            const futureActionsText = document.getElementById('new-front-future-actions').value.trim();
+            const futureActions = futureActionsText.split('\n').filter(a => a.trim());
+
+            const attentionPointsText = document.getElementById('new-front-attention-points').value.trim();
+            const attentionPoints = attentionPointsText.split('\n').filter(p => p.trim());
+
+            const newFront = {
+                id: 'f' + Date.now(),
+                name: name,
+                ownerName: ownerName,
+                ownerInitials: ownerName.split(' ').map(n => n[0]).join('').toUpperCase(),
+                maturityLevel: maturityLevel,
+                status: status,
+                mainObjectives: mainObjectives,
+                currentActions: currentActions,
+                futureActions: futureActions,
+                attentionPoints: attentionPoints,
+                maturityLevels: [
+                    { level: 1, description: "Nível 1", expectations: [], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 2, description: "Nível 2", expectations: [], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 3, description: "Nível 3", expectations: [], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 4, description: "Nível 4", expectations: [], problemsAvoided: [], evolutionIndicators: [] },
+                    { level: 5, description: "Nível 5", expectations: [], problemsAvoided: [], evolutionIndicators: [] }
+                ]
+            };
+
+            fronts.push(newFront);
+            saveFronts();
+            closeNewFront();
+        }
+
+        function deleteFront(frontId) {
+            if (confirm('Tem certeza que deseja deletar esta frente?')) {
+                fronts = fronts.filter(f => f.id !== frontId);
+                saveFronts();
+                render();
+            }
+        }
+
+        function resetFronts() {
+            if (confirm('Tem certeza que deseja restaurar todos os dados originais? Isso apagará todas as alterações!')) {
+                fronts = JSON.parse(JSON.stringify(defaultFronts));
+                saveFronts();
+                render();
+            }
+        }
+
+        function renderFrontsPage() {
+            const filteredFronts = getFilteredFronts();
+            const allOwners = [...new Set(fronts.map(f => f.ownerName))].sort();
+            const activeFiltersCount = filters.status.length + filters.maturityLevel.length + filters.owner.length + (filters.name ? 1 : 0);
+
+            return `
+                <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
+                    <div class="max-w-7xl mx-auto px-6 py-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h1 class="text-3xl font-bold text-slate-900">Hub de Tecnologia</h1>
+                                <p class="text-slate-600 mt-1 text-sm">Ferramenta Executiva de Storytelling de Confiabilidade</p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <button onclick="currentPage = 'journeys'; render()" class="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors text-sm">
+                                    <i class="fas fa-arrow-right mr-1"></i> Jornadas
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                <main class="max-w-7xl mx-auto px-6 py-8">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-3">
+                            <button onclick="toggleFilter()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded transition-colors text-sm">
+                                <i class="fas fa-filter mr-2"></i> Filtros ${activeFiltersCount > 0 ? `(${activeFiltersCount})` : ''}
+                            </button>
+                            <span class="text-sm text-slate-600">${filteredFronts.length}/${fronts.length} Frentes</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <button onclick="openNewFront()" class="px-3 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors text-sm">
+                                <i class="fas fa-plus mr-1"></i> Novo
+                            </button>
+                            <button onclick="resetFronts()" class="px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded transition-colors text-sm">
+                                <i class="fas fa-redo mr-1"></i> Reset
+                            </button>
+                        </div>
+                    </div>
+
+                    ${filtersExpanded ? `
+                        <div class="bg-white rounded-lg shadow-md p-6 mb-6 border-2 border-slate-200 filter-panel">
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                <div>
+                                    <label class="block text-sm font-semibold text-slate-700 mb-3">Buscar por Nome</label>
+                                    <input type="text" placeholder="Digite o nome..." value="${filters.name}" onchange="updateFilterName(this.value)" class="w-full">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-slate-700 mb-3">Status</label>
+                                    <div class="space-y-2">
+                                        ${Object.entries(statusConfig).map(([key, config]) => `
+                                            <label class="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" ${filters.status.includes(key) ? 'checked' : ''} onchange="updateFilterStatus('${key}')" class="w-4 h-4">
+                                                <span class="text-sm text-slate-700">${config.label}</span>
+                                            </label>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-slate-700 mb-3">Nível de Maturidade</label>
+                                    <div class="space-y-2">
+                                        ${[1, 2, 3, 4, 5].map(level => `
+                                            <label class="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" ${filters.maturityLevel.includes(level) ? 'checked' : ''} onchange="updateFilterMaturityLevel(${level})" class="w-4 h-4">
+                                                <span class="text-sm text-slate-700">Nível ${level}</span>
+                                            </label>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-slate-700 mb-3">Owner</label>
+                                    <div class="space-y-2 max-h-40 overflow-y-auto">
+                                        ${allOwners.map(owner => `
+                                            <label class="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" ${filters.owner.includes(owner) ? 'checked' : ''} onchange="updateFilterOwner('${owner}')" class="w-4 h-4">
+                                                <span class="text-sm text-slate-700">${owner}</span>
+                                            </label>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex gap-3 mt-6 pt-6 border-t border-slate-200">
+                                <button onclick="clearFilters()" class="px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors text-sm">
+                                    <i class="fas fa-times mr-2"></i> Limpar Filtros
+                                </button>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${filteredFronts.length === 0 ? `
+                        <div class="bg-white rounded-lg shadow-md p-12 text-center border-2 border-slate-200">
+                            <i class="fas fa-search text-4xl text-slate-400 mb-4"></i>
+                            <p class="text-slate-600 text-lg">Nenhuma frente encontrada com os filtros aplicados</p>
+                        </div>
+                    ` : `
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            ${filteredFronts.map(front => {
+                                const status = statusConfig[front.status];
+                                return `
+                                    <div class="bg-white rounded-lg shadow-md p-6 border-2 border-slate-200 front-card">
+                                        <div class="flex items-start justify-between mb-4">
+                                            <div class="flex items-center gap-3">
+                                                <div class="w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-lg">
+                                                    ${front.ownerInitials}
+                                                </div>
+                                                <div>
+                                                    <h3 class="font-bold text-slate-900">${front.name}</h3>
+                                                    <p class="text-xs text-slate-600">${front.ownerName}</p>
+                                                </div>
+                                            </div>
+                                            <button onclick="openEditFront('${front.id}')" class="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-600 hover:text-blue-600">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                        </div>
+
+                                        <div class="flex items-center gap-2 mb-4">
+                                            ${[...Array(5)].map((_, i) => `
+                                                <i class="fas fa-star ${i < front.maturityLevel ? 'star-filled' : 'star-empty'}"></i>
+                                            `).join('')}
+                                            <span class="text-xs text-slate-600 ml-2">${front.maturityLevel}/5</span>
+                                        </div>
+
+                                        <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold mb-4 ${status.bgColor} ${status.textColor}">
+                                            ${status.label}
+                                        </span>
+
+                                        <div class="space-y-2 mb-4">
+                                            ${front.mainObjectives.slice(0, 2).map(obj => `
+                                                <p class="text-xs text-slate-600"><i class="fas fa-check text-green-600 mr-2"></i>${obj}</p>
+                                            `).join('')}
+                                            ${front.mainObjectives.length > 2 ? `<p class="text-xs text-slate-500 italic">+${front.mainObjectives.length - 2} objetivo(s)</p>` : ''}
+                                        </div>
+
+                                        <button onclick="openFrontDetail('${front.id}')" class="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors text-sm">
+                                            <i class="fas fa-eye mr-2"></i> Ver Detalhes
+                                        </button>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `}
+                </main>
+
+                ${selectedFrontId ? renderFrontDetailModal() : ''}
+                ${editingFrontId ? renderEditFrontModal() : ''}
+                ${creatingNewFront ? renderNewFrontModal() : ''}
+            `;
+        }
+
+        function renderFrontDetailModal() {
+            const front = fronts.find(f => f.id === selectedFrontId);
+            if (!front) return '';
+            const status = statusConfig[front.status];
+
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeFrontDetail()">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                        <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
+                            <div class="flex items-center gap-4">
+                                <div class="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-2xl">
+                                    ${front.ownerInitials}
+                                </div>
+                                <div>
+                                    <h2 class="text-2xl font-bold text-slate-900">${front.name}</h2>
+                                    <p class="text-sm text-slate-600">${front.ownerName}</p>
+                                </div>
+                            </div>
+                            <button onclick="closeFrontDetail()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+
+                        <div class="p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
+                            <div class="grid grid-cols-3 gap-4">
+                                <div class="bg-slate-50 rounded-lg p-4">
+                                    <p class="text-xs text-slate-600 mb-2">Nível de Maturidade</p>
+                                    <div class="flex items-center gap-2">
+                                        ${[...Array(5)].map((_, i) => `
+                                            <i class="fas fa-star ${i < front.maturityLevel ? 'star-filled text-lg' : 'star-empty text-lg'}"></i>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                <div class="bg-slate-50 rounded-lg p-4">
+                                    <p class="text-xs text-slate-600 mb-2">Status</p>
+                                    <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold ${status.bgColor} ${status.textColor}">
+                                        ${status.label}
+                                    </span>
+                                </div>
+                                <div class="bg-slate-50 rounded-lg p-4">
+                                    <p class="text-xs text-slate-600 mb-2">Ações</p>
+                                    <button onclick="openEditFront('${front.id}')" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded transition-colors">
+                                        <i class="fas fa-edit mr-1"></i> Editar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <h3 class="font-semibold text-slate-900 mb-3">Visão Executiva</h3>
+                                <div class="space-y-4">
+                                    <div>
+                                        <h4 class="text-sm font-semibold text-slate-800 mb-2">Principais Objetivos</h4>
+                                        <ul class="space-y-1">
+                                            ${front.mainObjectives.map(obj => `
+                                                <li class="text-sm text-slate-700"><i class="fas fa-check text-green-600 mr-2"></i>${obj}</li>
+                                            `).join('')}
+                                        </ul>
+                                    </div>
+
+                                    <div>
+                                        <h4 class="text-sm font-semibold text-slate-800 mb-2 text-green-700">Ações que Viabilizaram o Nível Atual</h4>
+                                        <ul class="space-y-1">
+                                            ${front.currentActions.map(action => `
+                                                <li class="text-sm text-slate-700"><i class="fas fa-check-circle text-green-600 mr-2"></i>${action}</li>
+                                            `).join('')}
+                                        </ul>
+                                    </div>
+
+                                    <div>
+                                        <h4 class="text-sm font-semibold text-slate-800 mb-2 text-yellow-700">Ações para Evoluir para o Próximo Nível</h4>
+                                        <ul class="space-y-1">
+                                            ${front.futureActions.map(action => `
+                                                <li class="text-sm text-slate-700"><i class="fas fa-arrow-up text-yellow-600 mr-2"></i>${action}</li>
+                                            `).join('')}
+                                        </ul>
+                                    </div>
+
+                                    ${front.attentionPoints.length > 0 ? `
+                                        <div>
+                                            <h4 class="text-sm font-semibold text-slate-800 mb-2 text-red-700">Pontos de Atenção Declarados</h4>
+                                            <ul class="space-y-1">
+                                                ${front.attentionPoints.map(point => `
+                                                    <li class="text-sm text-slate-700"><i class="fas fa-exclamation-circle text-red-600 mr-2"></i>${point}</li>
+                                                `).join('')}
+                                            </ul>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+
+                            <div class="border-t border-slate-200 pt-6">
+                                <h3 class="font-semibold text-slate-900 mb-4">Mapa de Maturidade</h3>
+                                <div class="space-y-3">
+                                    ${front.maturityLevels.map(level => `
+                                        <div class="border border-slate-200 rounded-lg">
+                                            <button onclick="toggleLevel(${level.level})" class="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                                                <div class="flex items-center gap-3">
+                                                    <span class="font-semibold text-slate-900">Nível ${level.level}</span>
+                                                    <span class="text-sm text-slate-600">${level.description}</span>
+                                                </div>
+                                                <i class="fas fa-chevron-${expandedLevels[level.level] ? 'up' : 'down'} text-slate-600"></i>
+                                            </button>
+                                            ${expandedLevels[level.level] ? `
+                                                <div class="border-t border-slate-200 p-4 space-y-3">
+                                                    ${level.expectations.length > 0 ? `
+                                                        <div>
+                                                            <h5 class="text-sm font-semibold text-slate-800 mb-2">Expectativas</h5>
+                                                            <ul class="space-y-1">
+                                                                ${level.expectations.map(exp => `
+                                                                    <li class="text-sm text-slate-700">
+                                                                        <i class="fas fa-${exp.status === 'done' ? 'check-circle text-green-600' : exp.status === 'in-progress' ? 'clock text-yellow-600' : 'circle text-slate-400'} mr-2"></i>
+                                                                        ${exp.description}
+                                                                    </li>
+                                                                `).join('')}
+                                                            </ul>
+                                                        </div>
+                                                    ` : ''}
+                                                    ${level.problemsAvoided.length > 0 ? `
+                                                        <div>
+                                                            <h5 class="text-sm font-semibold text-slate-800 mb-2">Problemas Evitados</h5>
+                                                            <ul class="space-y-1">
+                                                                ${level.problemsAvoided.map(prob => `
+                                                                    <li class="text-sm text-slate-700"><i class="fas fa-shield text-green-600 mr-2"></i>${prob}</li>
+                                                                `).join('')}
+                                                            </ul>
+                                                        </div>
+                                                    ` : ''}
+                                                    ${level.evolutionIndicators.length > 0 ? `
+                                                        <div>
+                                                            <h5 class="text-sm font-semibold text-slate-800 mb-2">Indicadores de Evolução (KPIs)</h5>
+                                                            <ul class="space-y-1">
+                                                                ${level.evolutionIndicators.map(kpi => `
+                                                                    <li class="text-sm text-slate-700"><i class="fas fa-chart-line text-blue-600 mr-2"></i>${kpi}</li>
+                                                                `).join('')}
+                                                            </ul>
+                                                        </div>
+                                                    ` : ''}
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+
+                            <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                <button onclick="openEditFront('${front.id}')" class="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-edit mr-2"></i> Editar
+                                </button>
+                                <button onclick="deleteFront('${front.id}')" class="flex-1 px-4 py-2 bg-red-500 hover:bg-red-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-trash mr-2"></i> Deletar
+                                </button>
+                                <button onclick="closeFrontDetail()" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
+                                    <i class="fas fa-times mr-2"></i> Fechar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderEditFrontModal() {
+            const front = fronts.find(f => f.id === editingFrontId);
+            if (!front) return '';
+
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeEditFront()">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full m-4 edit-modal" onclick="event.stopPropagation()">
+                        <div class="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between">
+                            <h2 class="text-2xl font-bold text-slate-900">Editar Frente</h2>
+                            <button onclick="closeEditFront()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+
+                        <div class="p-6 space-y-4 overflow-y-auto max-h-[calc(85vh-120px)]">
+                            <div class="flex gap-2 border-b border-slate-200 mb-4">
+                                <button onclick="editFrontTab = 'basic'; render()" class="tab-button ${editFrontTab === 'basic' ? 'active' : ''}">Básico</button>
+                                <button onclick="editFrontTab = 'actions'; render()" class="tab-button ${editFrontTab === 'actions' ? 'active' : ''}">Objetivos e Ações</button>
+                                <button onclick="editFrontTab = 'maturity'; render()" class="tab-button ${editFrontTab === 'maturity' ? 'active' : ''}">Níveis de Maturidade</button>
+                            </div>
+
+                            ${editFrontTab === 'basic' ? `
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Nome da Frente</label>
+                                        <input type="text" id="edit-front-name" value="${front.name}" class="w-full">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Owner</label>
+                                        <input type="text" id="edit-front-owner" value="${front.ownerName}" class="w-full">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Nível de Maturidade (1-5)</label>
+                                        <input type="number" id="edit-front-maturity" min="1" max="5" value="${front.maturityLevel}" class="w-full">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Status</label>
+                                        <select id="edit-front-status" class="w-full">
+                                            <option value="at-risk" ${front.status === 'at-risk' ? 'selected' : ''}>Risco</option>
+                                            <option value="in-progress" ${front.status === 'in-progress' ? 'selected' : ''}>Em Progresso</option>
+                                            <option value="canceled" ${front.status === 'canceled' ? 'selected' : ''}>Cancelado</option>
+                                            <option value="achieved" ${front.status === 'achieved' ? 'selected' : ''}>Atingido</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            ` : editFrontTab === 'actions' ? `
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Objetivos Principais (um por linha)</label>
+                                        <textarea id="edit-front-objectives" rows="4" class="w-full">${front.mainObjectives.join('\n')}</textarea>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Ações Atuais (um por linha)</label>
+                                        <textarea id="edit-front-current-actions" rows="4" class="w-full">${front.currentActions.join('\n')}</textarea>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Ações Futuras (um por linha)</label>
+                                        <textarea id="edit-front-future-actions" rows="4" class="w-full">${front.futureActions.join('\n')}</textarea>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Pontos de Atenção (um por linha)</label>
+                                        <textarea id="edit-front-attention-points" rows="4" class="w-full">${front.attentionPoints.join('\n')}</textarea>
+                                    </div>
+                                </div>
+                            ` : `
+                                <div class="space-y-4">
+                                    <p class="text-sm text-slate-600">Edição de níveis de maturidade disponível em breve</p>
+                                </div>
+                            `}
+
+                            <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                <button onclick="saveEditFront()" class="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-save mr-2"></i> Salvar Alterações
+                                </button>
+                                <button onclick="closeEditFront()" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
+                                    <i class="fas fa-times mr-2"></i> Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderNewFrontModal() {
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeNewFront()">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full m-4 edit-modal" onclick="event.stopPropagation()">
+                        <div class="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between">
+                            <h2 class="text-2xl font-bold text-slate-900">Nova Frente de Engenharia</h2>
+                            <button onclick="closeNewFront()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+
+                        <div class="p-6 space-y-4 overflow-y-auto max-h-[calc(85vh-120px)]">
+                            <div class="flex gap-2 border-b border-slate-200 mb-4">
+                                <button onclick="newFrontTab = 'basic'; render()" class="tab-button ${newFrontTab === 'basic' ? 'active' : ''}">Básico</button>
+                                <button onclick="newFrontTab = 'actions'; render()" class="tab-button ${newFrontTab === 'actions' ? 'active' : ''}">Objetivos e Ações</button>
+                            </div>
+
+                            ${newFrontTab === 'basic' ? `
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Nome da Frente *</label>
+                                        <input type="text" id="new-front-name" placeholder="Ex: Gestão de Incidentes" class="w-full">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Owner *</label>
+                                        <input type="text" id="new-front-owner" placeholder="Ex: João Silva" class="w-full">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Nível de Maturidade (1-5)</label>
+                                        <input type="number" id="new-front-maturity" min="1" max="5" value="1" class="w-full">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Status</label>
+                                        <select id="new-front-status" class="w-full">
+                                            <option value="at-risk">Risco</option>
+                                            <option value="in-progress" selected>Em Progresso</option>
+                                            <option value="canceled">Cancelado</option>
+                                            <option value="achieved">Atingido</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            ` : `
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Objetivos Principais (um por linha)</label>
+                                        <textarea id="new-front-objectives" rows="4" placeholder="Digite os objetivos..."></textarea>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Ações Atuais (um por linha)</label>
+                                        <textarea id="new-front-current-actions" rows="4" placeholder="Digite as ações atuais..."></textarea>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Ações Futuras (um por linha)</label>
+                                        <textarea id="new-front-future-actions" rows="4" placeholder="Digite as ações futuras..."></textarea>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Pontos de Atenção (um por linha)</label>
+                                        <textarea id="new-front-attention-points" rows="4" placeholder="Digite os pontos de atenção..."></textarea>
+                                    </div>
+                                </div>
+                            `}
+
+                            <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                <button onclick="saveNewFront()" class="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-plus mr-2"></i> Criar Frente
+                                </button>
+                                <button onclick="closeNewFront()" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
+                                    <i class="fas fa-times mr-2"></i> Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderJourneysPage() {
+            return `
+                <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
+                    <div class="max-w-7xl mx-auto px-6 py-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h1 class="text-3xl font-bold text-slate-900">Maturidade de Jornadas</h1>
+                                <p class="text-slate-600 mt-1 text-sm">Avaliação de maturidade por pilar</p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <button onclick="currentPage = 'fronts'; render()" class="px-3 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors text-sm">
+                                    <i class="fas fa-arrow-left mr-1"></i> Voltar
+                                </button>
+                                <button onclick="openNewJourneyModal()" class="px-3 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors text-sm">
+                                    <i class="fas fa-plus mr-1"></i> Nova Jornada
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                <main class="max-w-7xl mx-auto px-6 py-8">
+                    <div class="space-y-6">
+                        ${journeys.map(journey => {
+                            const availabilityMaturity = calculatePillarMaturity(journey, 'availability');
+                            const qualityMaturity = calculatePillarMaturity(journey, 'quality');
+                            const securityMaturity = calculatePillarMaturity(journey, 'security');
+                            const performanceMaturity = calculatePillarMaturity(journey, 'performance');
+                            const overallMaturity = Math.round((availabilityMaturity + qualityMaturity + securityMaturity + performanceMaturity) / 4);
+                            const status = journeyStatusConfig[journey.status];
+                            const incidentCount = countIncidents(journey.id);
+
+                            return `
+                                <div class="bg-white rounded-lg shadow-md p-6 border-2 border-slate-200 journey-card">
+                                    <div class="flex items-center justify-between mb-6">
+                                        <div>
+                                            <h3 class="text-xl font-bold text-slate-900">${journey.name}</h3>
+                                            <p class="text-sm text-slate-600 mt-1">Sigla: <span class="font-semibold">${journey.acronym}</span></p>
+                                        </div>
+                                        <div class="flex items-center gap-3">
+                                            <span class="px-3 py-1 rounded-full text-xs font-semibold ${status.bgColor} ${status.textColor}">${status.label}</span>
+                                            ${incidentCount > 0 ? `
+                                                <button onclick="openIncidentOverview('${journey.id}')" class="incident-counter px-3 py-2 rounded-lg text-xs font-semibold bg-red-100 text-red-800 hover:bg-red-200 transition-colors">
+                                                    <i class="fas fa-exclamation-circle mr-1"></i> ${incidentCount} Incidente${incidentCount !== 1 ? 's' : ''}
+                                                </button>
+                                            ` : ''}
+                                            <button onclick="deleteJourney('${journey.id}')" class="px-3 py-2 bg-red-200 hover:bg-red-300 text-red-700 text-xs font-semibold rounded transition-colors">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+                                        <div onclick="openDetailModalJourney('${journey.id}', 'availability', Object.keys(pillarAttributes.availability)[0])" class="maturity-cell ${getMaturityColor(availabilityMaturity)}">
+                                            <div class="text-sm font-semibold mb-2">Disponibilidade</div>
+                                            <div class="text-3xl font-bold">${availabilityMaturity}%</div>
+                                        </div>
+                                        <div onclick="openDetailModalJourney('${journey.id}', 'quality', Object.keys(pillarAttributes.quality)[0])" class="maturity-cell ${getMaturityColor(qualityMaturity)}">
+                                            <div class="text-sm font-semibold mb-2">Qualidade</div>
+                                            <div class="text-3xl font-bold">${qualityMaturity}%</div>
+                                        </div>
+                                        <div onclick="openDetailModalJourney('${journey.id}', 'security', Object.keys(pillarAttributes.security)[0])" class="maturity-cell ${getMaturityColor(securityMaturity)}">
+                                            <div class="text-sm font-semibold mb-2">Segurança</div>
+                                            <div class="text-3xl font-bold">${securityMaturity}%</div>
+                                        </div>
+                                        <div onclick="openDetailModalJourney('${journey.id}', 'performance', Object.keys(pillarAttributes.performance)[0])" class="maturity-cell ${getMaturityColor(performanceMaturity)}">
+                                            <div class="text-sm font-semibold mb-2">Performance</div>
+                                            <div class="text-3xl font-bold">${performanceMaturity}%</div>
+                                        </div>
+                                        <div class="maturity-cell ${getMaturityColor(overallMaturity)}" style="border: 3px solid currentColor;">
+                                            <div class="text-sm font-semibold mb-2">Geral</div>
+                                            <div class="text-3xl font-bold">${overallMaturity}%</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex gap-3">
+                                        <button onclick="openEventModal('${journey.id}')" class="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors text-sm">
+                                            <i class="fas fa-plus mr-2"></i> Adicionar Evento
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+
+                    <div class="mt-8 bg-white rounded-lg shadow-md p-6 border-2 border-slate-200">
+                        <h3 class="text-lg font-bold text-slate-900 mb-4">Resumo Geral</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            ${['availability', 'quality', 'security', 'performance'].map(pillar => {
+                                const pillarNames = { availability: 'Disponibilidade', quality: 'Qualidade', security: 'Segurança', performance: 'Performance' };
+                                const avgMaturity = journeys.length > 0 ? Math.round(journeys.reduce((sum, j) => sum + calculatePillarMaturity(j, pillar), 0) / journeys.length) : 0;
+                                return `
+                                    <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                                        <h4 class="font-semibold text-slate-800 mb-2">${pillarNames[pillar]}</h4>
+                                        <div class="text-3xl font-bold text-blue-600">${avgMaturity}%</div>
+                                        <p class="text-xs text-slate-600 mt-1">Média geral</p>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                </main>
+
+                ${creatingNewJourney ? `
+                    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeNewJourneyModal()">
+                        <div class="bg-white rounded-lg shadow-2xl max-w-md w-full m-4 edit-modal" onclick="event.stopPropagation()">
+                            <div class="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between">
+                                <h2 class="text-2xl font-bold text-slate-900">Nova Jornada</h2>
+                                <button onclick="closeNewJourneyModal()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                    <i class="fas fa-times text-slate-600 text-xl"></i>
+                                </button>
+                            </div>
+                            <div class="p-6 space-y-4">
+                                <div>
+                                    <label class="block text-sm font-semibold text-slate-700 mb-2">Nome da Jornada *</label>
+                                    <input type="text" id="new-journey-name" placeholder="Ex: Checkout" class="w-full">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-slate-700 mb-2">Sigla *</label>
+                                    <input type="text" id="new-journey-acronym" placeholder="Ex: CHK" class="w-full">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-slate-700 mb-2">Status</label>
+                                    <select id="new-journey-status" class="w-full">
+                                        <option value="active">Ativa</option>
+                                        <option value="inactive">Inativa</option>
+                                        <option value="discovery">Em Discovery</option>
+                                    </select>
+                                </div>
+                                <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                    <button onclick="saveNewJourney()" class="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                        <i class="fas fa-plus mr-2"></i> Criar
+                                    </button>
+                                    <button onclick="closeNewJourneyModal()" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
+                                        <i class="fas fa-times mr-2"></i> Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+
+                ${showEventModal ? renderEventModal() : ''}
+                ${selectedPillar ? renderDetailModalJourney() : ''}
+                ${showIncidentOverview ? renderIncidentOverviewModal() : ''}
+            `;
+        }
+
+        function renderIncidentOverviewModal() {
+            if (!incidentOverviewJourneyId) return '';
+            const journey = journeys.find(j => j.id === incidentOverviewJourneyId);
+            if (!journey) return '';
+            
+            const incidents = journey.events.filter(e => e.category === 'Incidentes');
+            
+            // Contar pilares e atributos mais impactados
+            const pillarCount = {};
+            const attributeCount = {};
+            
+            incidents.forEach(incident => {
+                if (incident.pillar) {
+                    pillarCount[incident.pillar] = (pillarCount[incident.pillar] || 0) + 1;
+                }
+                if (incident.attributes) {
+                    incident.attributes.forEach(attr => {
+                        attributeCount[attr] = (attributeCount[attr] || 0) + 1;
+                    });
+                }
+            });
+            
+            const topPillars = Object.entries(pillarCount).sort((a, b) => b[1] - a[1]).slice(0, 3);
+            const topAttributes = Object.entries(attributeCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            
+            const pillarNames = {
+                availability: 'Disponibilidade',
+                quality: 'Qualidade',
+                security: 'Segurança',
+                performance: 'Performance'
+            };
+
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeIncidentOverview()">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                        <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
+                            <div>
+                                <h2 class="text-2xl font-bold text-slate-900">Overview de Incidentes</h2>
+                                <p class="text-sm text-slate-600 mt-1">${journey.name} (${journey.acronym})</p>
+                            </div>
+                            <button onclick="closeIncidentOverview()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+
+                        <div class="p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
+                            <div class="grid grid-cols-3 gap-4">
+                                <div class="bg-red-50 rounded-lg p-4 border border-red-200">
+                                    <p class="text-xs text-red-600 mb-2 font-semibold">TOTAL DE INCIDENTES</p>
+                                    <div class="text-4xl font-bold text-red-700">${incidents.length}</div>
+                                </div>
+                                <div class="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                                    <p class="text-xs text-yellow-600 mb-2 font-semibold">PILAR MAIS IMPACTADO</p>
+                                    <div class="text-lg font-bold text-yellow-700">${topPillars.length > 0 ? pillarNames[topPillars[0][0]] : 'N/A'}</div>
+                                    <p class="text-xs text-yellow-600 mt-1">${topPillars.length > 0 ? topPillars[0][1] : 0} incidente(s)</p>
+                                </div>
+                                <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                                    <p class="text-xs text-blue-600 mb-2 font-semibold">ATRIBUTO CRÍTICO</p>
+                                    <div class="text-lg font-bold text-blue-700">${topAttributes.length > 0 ? topAttributes[0][0] : 'N/A'}</div>
+                                    <p class="text-xs text-blue-600 mt-1">${topAttributes.length > 0 ? topAttributes[0][1] : 0} ocorrência(s)</p>
+                                </div>
+                            </div>
+
+                            <div class="border-t border-slate-200 pt-6">
+                                <h3 class="font-semibold text-slate-900 mb-4">Lista de Incidentes</h3>
+                                <div class="space-y-3">
+                                    ${incidents.map(incident => {
+                                        const pillarName = pillarNames[incident.pillar] || 'N/A';
+                                        return `
+                                            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                                                <div class="flex items-start justify-between mb-3">
+                                                    <div>
+                                                        <h4 class="font-semibold text-slate-900">${incident.incidentNumber}</h4>
+                                                        <p class="text-sm text-slate-600 mt-1">${incident.description}</p>
+                                                    </div>
+                                                    <button onclick="deleteEvent('${journey.id}', '${incident.id}')" class="p-2 hover:bg-red-100 rounded transition-colors text-red-600">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                                <div class="flex flex-wrap gap-2 mt-3">
+                                                    <span class="tag tag-mttr"><i class="fas fa-hourglass-half mr-1"></i> MTTR: ${incident.mttr}</span>
+                                                    <span class="tag tag-pillar"><i class="fas fa-cube mr-1"></i> ${pillarName}</span>
+                                                    ${incident.attributes && incident.attributes.length > 0 ? incident.attributes.map(attr => `
+                                                        <span class="tag tag-attribute"><i class="fas fa-check-circle mr-1"></i> ${attr}</span>
+                                                    `).join('') : ''}
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+
+                            ${topPillars.length > 0 || topAttributes.length > 0 ? `
+                                <div class="border-t border-slate-200 pt-6">
+                                    <h3 class="font-semibold text-slate-900 mb-4">Pilares e Atributos Campeões</h3>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div class="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                                            <h4 class="font-semibold text-yellow-900 mb-3">Pilares Mais Impactados</h4>
+                                            <div class="space-y-2">
+                                                ${topPillars.map((pillar, idx) => `
+                                                    <div class="flex items-center justify-between">
+                                                        <span class="text-sm text-yellow-800">${idx + 1}. ${pillarNames[pillar[0]]}</span>
+                                                        <span class="px-2 py-1 bg-yellow-200 text-yellow-900 text-xs font-semibold rounded">${pillar[1]} incidente(s)</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                        <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                                            <h4 class="font-semibold text-blue-900 mb-3">Atributos Críticos</h4>
+                                            <div class="space-y-2">
+                                                ${topAttributes.map((attr, idx) => `
+                                                    <div class="flex items-center justify-between">
+                                                        <span class="text-sm text-blue-800">${idx + 1}. ${attr[0]}</span>
+                                                        <span class="px-2 py-1 bg-blue-200 text-blue-900 text-xs font-semibold rounded">${attr[1]} ocorrência(s)</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ` : ''}
+
+                            <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                <button onclick="closeIncidentOverview()" class="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-check mr-2"></i> Fechar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderEventModal() {
+            const journey = journeys.find(j => j.id === selectedEventJourneyId);
+            if (!journey) return '';
+
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeEventModal()">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full m-4 edit-modal" onclick="event.stopPropagation()">
+                        <div class="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between">
+                            <h2 class="text-2xl font-bold text-slate-900">Adicionar Evento - ${journey.name}</h2>
+                            <button onclick="closeEventModal()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+                        <div class="p-6 space-y-4 overflow-y-auto max-h-[calc(85vh-120px)]">
+                            ${!selectedEventCategory ? `
+                                <div>
+                                    <label class="block text-sm font-semibold text-slate-700 mb-3">Selecione a Categoria do Evento</label>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        ${eventCategories.map(category => `
+                                            <button onclick="selectEventCategory('${category}')" class="px-4 py-3 border-2 border-slate-300 hover:border-blue-500 rounded-lg transition-colors text-sm font-semibold text-slate-700 hover:text-blue-600">
+                                                <i class="fas fa-${category === 'Incidentes' ? 'exclamation-circle' : category === 'Requisições' ? 'clipboard-list' : category === 'Problemas' ? 'bug' : 'warning'} mr-2"></i>
+                                                ${category}
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+
+                            ${selectedEventCategory === 'Incidentes' && showIncidentForm ? `
+                                <div class="space-y-4">
+                                    <h3 class="font-semibold text-slate-900">Formulário de Incidente</h3>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Nr do Incidente *</label>
+                                        <input type="text" id="incident-number" placeholder="Ex: INC-2024-001" class="w-full">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Quando Ocorreu *</label>
+                                        <input type="datetime-local" id="incident-date" class="w-full">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">MTTR (Tempo de Resolução Total) *</label>
+                                        <input type="text" id="incident-mttr" placeholder="Ex: 2h 30min" class="w-full">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Descritivo sobre o Cenário *</label>
+                                        <textarea id="incident-description" placeholder="Descreva o que aconteceu..." rows="3" class="w-full"></textarea>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Qual Jornada Impactou?</label>
+                                        <select id="incident-journey" class="w-full">
+                                            <option value="">Selecione uma jornada...</option>
+                                            ${journeys.map(j => `<option value="${j.id}">${j.name}</option>`).join('')}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Há Risco Relacionado?</label>
+                                        <input type="text" id="incident-risk" placeholder="Descreva o risco..." class="w-full">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Classificação de Origem</label>
+                                        <select id="incident-origin" class="w-full">
+                                            <option value="">Selecione a origem...</option>
+                                            ${incidentOrigins.map(origin => `<option value="${origin}">${origin}</option>`).join('')}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Como Podemos Evitar?</label>
+                                        <textarea id="incident-prevention" placeholder="Descreva as ações preventivas..." rows="2" class="w-full"></textarea>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Lições Aprendidas</label>
+                                        <textarea id="incident-lessons" placeholder="Descreva as lições aprendidas..." rows="2" class="w-full"></textarea>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Pilar de Engenharia Relacionado</label>
+                                        <select id="incident-pillar" class="w-full">
+                                            <option value="">Selecione um pilar...</option>
+                                            <option value="availability">Disponibilidade</option>
+                                            <option value="quality">Qualidade</option>
+                                            <option value="security">Segurança</option>
+                                            <option value="performance">Performance</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-3">Quais Atributos de Maturidade Podemos Evoluir?</label>
+                                        <div class="space-y-2 max-h-40 overflow-y-auto">
+                                            ${Object.entries(pillarAttributes).flatMap(([pillar, attrs]) => 
+                                                Object.keys(attrs).map(attr => `
+                                                    <label class="flex items-center gap-2 cursor-pointer">
+                                                        <input type="checkbox" name="incident-attributes" value="${attr}" class="w-4 h-4">
+                                                        <span class="text-sm text-slate-700">${attr}</span>
+                                                    </label>
+                                                `)
+                                            ).join('')}
+                                        </div>
+                                    </div>
+
+                                    <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                        <button onclick="saveIncident()" class="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                            <i class="fas fa-save mr-2"></i> Salvar Incidente
+                                        </button>
+                                        <button onclick="selectEventCategory(null); showIncidentForm = false; render()" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
+                                            <i class="fas fa-arrow-left mr-2"></i> Voltar
+                                        </button>
+                                        <button onclick="closeEventModal()" class="flex-1 px-4 py-2 bg-red-300 hover:bg-red-400 text-red-700 font-semibold rounded transition-colors">
+                                            <i class="fas fa-times mr-2"></i> Cancelar
+                                        </button>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderDetailModalJourney() {
+            if (!selectedPillar || !editingJourneyId) return '';
+            const journey = journeys.find(j => j.id === editingJourneyId);
+            if (!journey) return '';
+            const attributes = pillarAttributes[selectedPillar];
+            const currentValue = journey.maturity[selectedPillar][selectedAttribute] || 0;
+            const pillarNames = { availability: 'Disponibilidade', quality: 'Qualidade', security: 'Segurança', performance: 'Performance' };
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeDetailModalJourney()">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                        <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
+                            <div>
+                                <h2 class="text-2xl font-bold text-slate-900">${journey.name}</h2>
+                                <p class="text-sm text-slate-600 mt-1">${pillarNames[selectedPillar]} - ${selectedAttribute}</p>
+                            </div>
+                            <button onclick="closeDetailModalJourney()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+                        <div class="p-6 space-y-6">
+                            <div class="bg-slate-50 rounded-lg p-6">
+                                <p class="text-sm text-slate-600 mb-4">${attributes[selectedAttribute]}</p>
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-3">Nível de Maturidade: <span class="text-blue-600 text-lg">${currentValue}%</span></label>
+                                        <div class="slider-container">
+                                            <input type="range" min="0" max="100" step="5" value="${currentValue}" onchange="updateAttributeValue('${journey.id}', '${selectedPillar}', '${selectedAttribute}', this.value)" class="w-full">
+                                            <span class="text-2xl font-bold text-slate-700 min-w-fit">${currentValue}%</span>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-6 gap-2 mt-6">
+                                        ${[0, 20, 40, 60, 80, 100].map(val => `
+                                            <button onclick="updateAttributeValue('${journey.id}', '${selectedPillar}', '${selectedAttribute}', ${val})" class="px-3 py-2 rounded font-semibold transition-all ${currentValue === val ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}">
+                                                ${val}%
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="border-t border-slate-200 pt-4">
+                                <h4 class="font-semibold text-slate-800 mb-3">Interpretação:</h4>
+                                <div class="space-y-2 text-sm text-slate-600">
+                                    <p><span class="font-semibold">0-25%:</span> Não implementado ou muito básico</p>
+                                    <p><span class="font-semibold">26-50%:</span> Implementação parcial</p>
+                                    <p><span class="font-semibold">51-75%:</span> Bem implementado</p>
+                                    <p><span class="font-semibold">76-100%:</span> Totalmente implementado e otimizado</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                <button onclick="closeDetailModalJourney()" class="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-check mr-2"></i> Fechar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            if (currentPage === 'journeys') {
+                app.innerHTML = renderJourneysPage();
+            } else {
+                app.innerHTML = renderFrontsPage();
+            }
+        }
+
+        render();
+    </script>
+</body>
+</html>
+
