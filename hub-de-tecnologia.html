@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hub de Tecnologia - Ferramenta Executiva de Storytelling de Confiabilidade</title>
+    <title>Hub de Tecnologia - Ferramenta Executiva</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -532,6 +532,26 @@
         let showIncidentOverview = false;
         let incidentOverviewJourneyId = null;
 
+        function saveUIState() {
+            const uiState = {
+                currentPage,
+                filtersExpanded,
+                filters
+            };
+            localStorage.setItem('uiState', JSON.stringify(uiState));
+        }
+
+        (function restoreUIState() {
+            try {
+                const saved = JSON.parse(localStorage.getItem('uiState'));
+                if (saved && typeof saved === 'object') {
+                    if (saved.currentPage) currentPage = saved.currentPage;
+                    if (typeof saved.filtersExpanded === 'boolean') filtersExpanded = saved.filtersExpanded;
+                    if (saved.filters && typeof saved.filters === 'object') filters = Object.assign(filters, saved.filters);
+                }
+            } catch (e) {}
+        })();
+
         function saveFronts() {
             localStorage.setItem('fronts', JSON.stringify(fronts));
         }
@@ -652,7 +672,7 @@
 
         function openDetailModalJourney(journeyId, pillar, attribute) {
             selectedPillar = pillar;
-            selectedAttribute = attribute;
+            selectedAttribute = attribute; // mantido por compatibilidade, mas não é necessário para a nova UI
             editingJourneyId = journeyId;
             render();
         }
@@ -724,6 +744,7 @@
 
         function toggleFilter() {
             filtersExpanded = !filtersExpanded;
+            saveUIState();
             render();
         }
 
@@ -734,6 +755,7 @@
             } else {
                 filters.status.push(status);
             }
+            saveUIState();
             render();
         }
 
@@ -744,6 +766,7 @@
             } else {
                 filters.maturityLevel.push(level);
             }
+            saveUIState();
             render();
         }
 
@@ -754,17 +777,86 @@
             } else {
                 filters.owner.push(owner);
             }
+            saveUIState();
             render();
         }
 
         function updateFilterName(name) {
             filters.name = name;
+            saveUIState();
             render();
         }
 
         function clearFilters() {
             filters = { status: [], maturityLevel: [], owner: [], name: '' };
+            saveUIState();
             render();
+        }
+
+        function navigateTo(page) {
+            currentPage = page;
+            saveUIState();
+            render();
+        }
+
+        function exportData() {
+            const data = { fronts, journeys };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'hub-tecnologia-dados.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function importDataFromFile(file) {
+            const reader = new FileReader();
+            reader.onload = function() {
+                try {
+                    const data = JSON.parse(reader.result);
+                    if (!data || typeof data !== 'object') throw new Error('Formato inválido');
+                    if (!confirm('Importar substituirá os dados atuais. Continuar?')) return;
+                    if (Array.isArray(data.fronts)) fronts = data.fronts;
+                    if (Array.isArray(data.journeys)) journeys = data.journeys;
+                    saveFronts();
+                    saveJourneys();
+                    render();
+                } catch (e) {
+                    alert('Arquivo inválido para importação.');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function handleImportFile(input) {
+            const file = input && input.files && input.files[0];
+            if (file) {
+                importDataFromFile(file);
+            }
+            if (input) input.value = '';
+        }
+
+        function resetJourneys() {
+            if (confirm('Restaurar Jornadas para os dados originais? Isso apagará alterações!')) {
+                journeys = JSON.parse(JSON.stringify(defaultJourneys));
+                saveJourneys();
+                render();
+            }
+        }
+
+        function closeAnyOpenModal() {
+            let changed = false;
+            if (selectedFrontId) { selectedFrontId = null; changed = true; }
+            if (editingFrontId) { editingFrontId = null; changed = true; }
+            if (creatingNewFront) { creatingNewFront = false; changed = true; }
+            if (showEventModal) { showEventModal = false; changed = true; }
+            if (selectedPillar || editingJourneyId) { selectedPillar = null; selectedAttribute = null; editingJourneyId = null; changed = true; }
+            if (showIncidentOverview) { showIncidentOverview = false; incidentOverviewJourneyId = null; changed = true; }
+            if (creatingNewJourney) { creatingNewJourney = false; changed = true; }
+            if (changed) render();
         }
 
         function getFilteredFronts() {
@@ -818,23 +910,73 @@
             const front = fronts.find(f => f.id === editingFrontId);
             if (!front) return;
 
-            front.name = document.getElementById('edit-front-name').value.trim();
-            front.ownerName = document.getElementById('edit-front-owner').value.trim();
-            front.ownerInitials = front.ownerName.split(' ').map(n => n[0]).join('').toUpperCase();
-            front.maturityLevel = parseInt(document.getElementById('edit-front-maturity').value);
-            front.status = document.getElementById('edit-front-status').value;
+            const nameEl = document.getElementById('edit-front-name');
+            const ownerEl = document.getElementById('edit-front-owner');
+            const maturityEl = document.getElementById('edit-front-maturity');
+            const statusEl = document.getElementById('edit-front-status');
 
-            const objectivesText = document.getElementById('edit-front-objectives').value.trim();
-            front.mainObjectives = objectivesText.split('\n').filter(o => o.trim());
+            if (nameEl) front.name = nameEl.value.trim();
+            if (ownerEl) {
+                front.ownerName = ownerEl.value.trim();
+                front.ownerInitials = front.ownerName.split(' ').map(n => n[0]).join('').toUpperCase();
+            }
+            if (maturityEl) front.maturityLevel = parseInt(maturityEl.value);
+            if (statusEl) front.status = statusEl.value;
 
-            const currentActionsText = document.getElementById('edit-front-current-actions').value.trim();
-            front.currentActions = currentActionsText.split('\n').filter(a => a.trim());
+            const objectivesEl = document.getElementById('edit-front-objectives');
+            if (objectivesEl) {
+                const objectivesText = objectivesEl.value.trim();
+                front.mainObjectives = objectivesText.split('\n').filter(o => o.trim());
+            }
 
-            const futureActionsText = document.getElementById('edit-front-future-actions').value.trim();
-            front.futureActions = futureActionsText.split('\n').filter(a => a.trim());
+            const currentActionsEl = document.getElementById('edit-front-current-actions');
+            if (currentActionsEl) {
+                const currentActionsText = currentActionsEl.value.trim();
+                front.currentActions = currentActionsText.split('\n').filter(a => a.trim());
+            }
 
-            const attentionPointsText = document.getElementById('edit-front-attention-points').value.trim();
-            front.attentionPoints = attentionPointsText.split('\n').filter(p => p.trim());
+            const futureActionsEl = document.getElementById('edit-front-future-actions');
+            if (futureActionsEl) {
+                const futureActionsText = futureActionsEl.value.trim();
+                front.futureActions = futureActionsText.split('\n').filter(a => a.trim());
+            }
+
+            const attentionPointsEl = document.getElementById('edit-front-attention-points');
+            if (attentionPointsEl) {
+                const attentionPointsText = attentionPointsEl.value.trim();
+                front.attentionPoints = attentionPointsText.split('\n').filter(p => p.trim());
+            }
+
+            // Persistir Níveis de Maturidade quando a aba "maturity" for usada
+            if (front.maturityLevels && Array.isArray(front.maturityLevels)) {
+                front.maturityLevels = front.maturityLevels.map(levelObj => {
+                    const level = levelObj.level;
+                    const descEl = document.getElementById(`edit-level-${level}-description`);
+                    const expEl = document.getElementById(`edit-level-${level}-expectations`);
+                    const probEl = document.getElementById(`edit-level-${level}-problems`);
+                    const indEl = document.getElementById(`edit-level-${level}-indicators`);
+
+                    const next = { ...levelObj };
+                    if (descEl) next.description = descEl.value.trim();
+                    if (expEl) {
+                        const lines = expEl.value.split('\n').map(l => l.trim()).filter(Boolean);
+                        next.expectations = lines.map(line => {
+                            const parts = line.split('|');
+                            const description = (parts[0] || '').trim();
+                            const rawStatus = (parts[1] || 'not-done').trim();
+                            const status = ['done', 'in-progress', 'not-done'].includes(rawStatus) ? rawStatus : 'not-done';
+                            return { description, status };
+                        });
+                    }
+                    if (probEl) {
+                        next.problemsAvoided = probEl.value.split('\n').map(l => l.trim()).filter(Boolean);
+                    }
+                    if (indEl) {
+                        next.evolutionIndicators = indEl.value.split('\n').map(l => l.trim()).filter(Boolean);
+                    }
+                    return next;
+                });
+            }
 
             saveFronts();
             closeEditFront();
@@ -918,7 +1060,14 @@
                                 <p class="text-slate-600 mt-1 text-sm">Ferramenta Executiva de Storytelling de Confiabilidade</p>
                             </div>
                             <div class="flex items-center gap-3">
-                                <button onclick="currentPage = 'journeys'; render()" class="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors text-sm">
+                                <input id="import-input-fronts" type="file" accept="application/json" class="hidden" onchange="handleImportFile(this)">
+                                <button onclick="exportData()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm">
+                                    <i class="fas fa-file-export mr-1"></i> Exportar
+                                </button>
+                                <button onclick="document.getElementById('import-input-fronts').click()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm">
+                                    <i class="fas fa-file-import mr-1"></i> Importar
+                                </button>
+                                <button onclick="navigateTo('journeys')" class="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors text-sm">
                                     <i class="fas fa-arrow-right mr-1"></i> Jornadas
                                 </button>
                             </div>
@@ -1280,7 +1429,34 @@
                                 </div>
                             ` : `
                                 <div class="space-y-4">
-                                    <p class="text-sm text-slate-600">Edição de níveis de maturidade disponível em breve</p>
+                                    ${front.maturityLevels.map((lvl, idx) => `
+                                        <div class="border border-slate-200 rounded-lg p-4">
+                                            <div class="flex items-center justify-between mb-3">
+                                                <div class="flex items-center gap-3">
+                                                    <span class="font-semibold text-slate-900">Nível ${lvl.level}</span>
+                                                </div>
+                                            </div>
+                                            <div class="space-y-3">
+                                                <div>
+                                                    <label class="block text-sm font-semibold text-slate-700 mb-2">Descrição</label>
+                                                    <input type="text" id="edit-level-${lvl.level}-description" value="${lvl.description || ''}" class="w-full">
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-semibold text-slate-700 mb-2">Expectativas (uma por linha no formato: Descrição | status)</label>
+                                                    <textarea id="edit-level-${lvl.level}-expectations" rows="3" class="w-full">${(lvl.expectations || []).map(e => `${e.description} | ${e.status || 'not-done'}`).join('\n')}</textarea>
+                                                    <p class="text-xs text-slate-500 mt-1">Status válidos: done, in-progress, not-done</p>
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-semibold text-slate-700 mb-2">Problemas Evitados (um por linha)</label>
+                                                    <textarea id="edit-level-${lvl.level}-problems" rows="2" class="w-full">${(lvl.problemsAvoided || []).join('\n')}</textarea>
+                                                </div>
+                                                <div>
+                                                    <label class="block text-sm font-semibold text-slate-700 mb-2">Indicadores de Evolução (um por linha)</label>
+                                                    <textarea id="edit-level-${lvl.level}-indicators" rows="2" class="w-full">${(lvl.evolutionIndicators || []).join('\n')}</textarea>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
                                 </div>
                             `}
 
@@ -1384,11 +1560,21 @@
                                 <p class="text-slate-600 mt-1 text-sm">Avaliação de maturidade por pilar</p>
                             </div>
                             <div class="flex items-center gap-3">
-                                <button onclick="currentPage = 'fronts'; render()" class="px-3 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors text-sm">
+                                <button onclick="navigateTo('fronts')" class="px-3 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors text-sm">
                                     <i class="fas fa-arrow-left mr-1"></i> Voltar
                                 </button>
                                 <button onclick="openNewJourneyModal()" class="px-3 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors text-sm">
                                     <i class="fas fa-plus mr-1"></i> Nova Jornada
+                                </button>
+                                <button onclick="resetJourneys()" class="px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded transition-colors text-sm">
+                                    <i class="fas fa-redo mr-1"></i> Reset Jornadas
+                                </button>
+                                <input id="import-input-journeys" type="file" accept="application/json" class="hidden" onchange="handleImportFile(this)">
+                                <button onclick="exportData()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm">
+                                    <i class="fas fa-file-export mr-1"></i> Exportar
+                                </button>
+                                <button onclick="document.getElementById('import-input-journeys').click()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm">
+                                    <i class="fas fa-file-import mr-1"></i> Importar
                                 </button>
                             </div>
                         </div>
@@ -1787,38 +1973,48 @@
             const journey = journeys.find(j => j.id === editingJourneyId);
             if (!journey) return '';
             const attributes = pillarAttributes[selectedPillar];
-            const currentValue = journey.maturity[selectedPillar][selectedAttribute] || 0;
             const pillarNames = { availability: 'Disponibilidade', quality: 'Qualidade', security: 'Segurança', performance: 'Performance' };
+            const avgPercent = calculatePillarMaturity(journey, selectedPillar);
+            const starCount = Math.max(1, Math.min(5, Math.round((avgPercent / 100) * 5)));
             return `
                 <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeDetailModalJourney()">
-                    <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-3xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
                         <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
                             <div>
                                 <h2 class="text-2xl font-bold text-slate-900">${journey.name}</h2>
-                                <p class="text-sm text-slate-600 mt-1">${pillarNames[selectedPillar]} - ${selectedAttribute}</p>
+                                <div class="flex items-center gap-3 mt-1">
+                                    <span class="text-sm text-slate-600">${pillarNames[selectedPillar]}</span>
+                                    <div class="flex items-center gap-1">
+                                        ${[...Array(5)].map((_, i) => `
+                                            <i class="fas fa-star ${i < starCount ? 'star-filled' : 'star-empty'}"></i>
+                                        `).join('')}
+                                    </div>
+                                    <span class="text-xs text-slate-500">${avgPercent}%</span>
+                                </div>
+                                ${selectedPillar === 'performance' ? `<p class="text-xs text-slate-500 mt-1">Referência: maturidade alinhada a métricas de experiência (ex.: APDEX).</p>` : ''}
                             </div>
                             <button onclick="closeDetailModalJourney()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors">
                                 <i class="fas fa-times text-slate-600 text-xl"></i>
                             </button>
                         </div>
-                        <div class="p-6 space-y-6">
-                            <div class="bg-slate-50 rounded-lg p-6">
-                                <p class="text-sm text-slate-600 mb-4">${attributes[selectedAttribute]}</p>
+                        <div class="p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
+                            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                                <h4 class="font-semibold text-slate-800 mb-3">Atributos de ${pillarNames[selectedPillar]}</h4>
                                 <div class="space-y-4">
-                                    <div>
-                                        <label class="block text-sm font-semibold text-slate-700 mb-3">Nível de Maturidade: <span class="text-blue-600 text-lg">${currentValue}%</span></label>
-                                        <div class="slider-container">
-                                            <input type="range" min="0" max="100" step="5" value="${currentValue}" onchange="updateAttributeValue('${journey.id}', '${selectedPillar}', '${selectedAttribute}', this.value)" class="w-full">
-                                            <span class="text-2xl font-bold text-slate-700 min-w-fit">${currentValue}%</span>
-                                        </div>
-                                    </div>
-                                    <div class="grid grid-cols-6 gap-2 mt-6">
-                                        ${[0, 20, 40, 60, 80, 100].map(val => `
-                                            <button onclick="updateAttributeValue('${journey.id}', '${selectedPillar}', '${selectedAttribute}', ${val})" class="px-3 py-2 rounded font-semibold transition-all ${currentValue === val ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}">
-                                                ${val}%
-                                            </button>
-                                        `).join('')}
-                                    </div>
+                                    ${Object.keys(attributes).map(attr => {
+                                        const value = journey.maturity[selectedPillar][attr] || 0;
+                                        const description = attributes[attr];
+                                        return `
+                                            <div>
+                                                <div class="flex items-center justify-between mb-2">
+                                                    <label class="text-sm font-semibold text-slate-700">${attr}</label>
+                                                    <span class="text-sm font-bold text-slate-700">${value}%</span>
+                                                </div>
+                                                <p class="text-xs text-slate-500 mb-2">${description}</p>
+                                                <input type="range" min="0" max="100" step="5" value="${value}" oninput="updateAttributeValue('${journey.id}', '${selectedPillar}', '${attr}', this.value)" class="w-full">
+                                            </div>
+                                        `;
+                                    }).join('')}
                                 </div>
                             </div>
                             <div class="border-t border-slate-200 pt-4">
@@ -1848,6 +2044,12 @@
             } else {
                 app.innerHTML = renderFrontsPage();
             }
+
+            document.onkeydown = function(e) {
+                if ((e.key === 'Escape' || e.key === 'Esc')) {
+                    closeAnyOpenModal();
+                }
+            };
         }
 
         render();
