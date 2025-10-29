@@ -599,7 +599,7 @@
         // Estados para OKRs
         let creatingNewOKR = false;
         let editingOKRId = null;
-        let showingFrontsRelationModal = null; // ID do OKR sendo relacionado
+        let showingFrontsRelationModal = null; // Formato: 'okrId|krId' ou null
         let draggedFrontId = null; // Para drag and drop
         
         // Estados para Indicadores
@@ -1055,7 +1055,10 @@
         }
 
         function getOKRsByFront(frontId) {
-            return okrs.filter(okr => okr.relatedFronts && okr.relatedFronts.includes(frontId));
+            // Buscar OKRs que tenham pelo menos um KR relacionado a esta frente
+            return okrs.filter(okr => {
+                return okr.krs && okr.krs.some(kr => kr.relatedFronts && kr.relatedFronts.includes(frontId));
+            });
         }
 
         function openFrontDetail(frontId) {
@@ -2203,6 +2206,7 @@
                     realizado: 0, // Será atualizado automaticamente pelos indicadores
                     varMoM: 0, // Será calculado automaticamente
                     indicatorPath: indicatorPath || null,
+                    relatedFronts: [], // Frentes relacionadas a este KR específico
                     createdAt: new Date().toISOString()
                 };
             });
@@ -2211,7 +2215,6 @@
                 id: 'okr' + Date.now(),
                 objetivo,
                 krs,
-                relatedFronts: [], // Será preenchido pelo relacionamento
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             };
@@ -2235,8 +2238,8 @@
             return { status: 'behind', color: 'bg-red-100', textColor: 'text-red-800', label: 'Atrasado', progress: avgProgress };
         }
 
-        function openFrontsRelationModal(okrId) {
-            showingFrontsRelationModal = okrId;
+        function openFrontsRelationModal(okrId, krId) {
+            showingFrontsRelationModal = `${okrId}|${krId}`;
             render();
         }
 
@@ -2255,16 +2258,19 @@
             e.dataTransfer.effectAllowed = 'move';
         }
 
-        function dropOnOKR(e, okrId) {
+        function dropOnKR(e, okrId, krId) {
             e.preventDefault();
             if (!draggedFrontId) return;
             
             const okr = okrs.find(o => o.id === okrId);
             if (!okr) return;
             
-            if (!okr.relatedFronts) okr.relatedFronts = [];
-            if (!okr.relatedFronts.includes(draggedFrontId)) {
-                okr.relatedFronts.push(draggedFrontId);
+            const kr = okr.krs.find(k => k.id === krId);
+            if (!kr) return;
+            
+            if (!kr.relatedFronts) kr.relatedFronts = [];
+            if (!kr.relatedFronts.includes(draggedFrontId)) {
+                kr.relatedFronts.push(draggedFrontId);
                 saveOKRs();
             }
             
@@ -2272,10 +2278,28 @@
             render();
         }
 
-        function removeFrontFromOKR(okrId, frontId) {
+        function addFrontToKR(okrId, krId, frontId) {
             const okr = okrs.find(o => o.id === okrId);
-            if (okr && okr.relatedFronts) {
-                okr.relatedFronts = okr.relatedFronts.filter(f => f !== frontId);
+            if (!okr) return;
+            
+            const kr = okr.krs.find(k => k.id === krId);
+            if (!kr) return;
+            
+            if (!kr.relatedFronts) kr.relatedFronts = [];
+            if (!kr.relatedFronts.includes(frontId)) {
+                kr.relatedFronts.push(frontId);
+                saveOKRs();
+                render();
+            }
+        }
+
+        function removeFrontFromKR(okrId, krId, frontId) {
+            const okr = okrs.find(o => o.id === okrId);
+            if (!okr) return;
+            
+            const kr = okr.krs.find(k => k.id === krId);
+            if (kr && kr.relatedFronts) {
+                kr.relatedFronts = kr.relatedFronts.filter(f => f !== frontId);
                 saveOKRs();
                 render();
             }
@@ -2295,7 +2319,7 @@
             
             okrs.forEach(okr => {
                 okr.krs.forEach((kr, idx) => {
-                    const relatedFrontsNames = (okr.relatedFronts || []).map(fId => {
+                    const relatedFrontsNames = (kr.relatedFronts || []).map(fId => {
                         const front = fronts.find(f => f.id === fId);
                         return front ? front.name : fId;
                     }).join('; ');
@@ -2374,14 +2398,9 @@
                         <div class="space-y-6">
                             ${okrs.map(okr => {
                                 const status = calculateOKRStatus(okr);
-                                const relatedFrontsNames = (okr.relatedFronts || []).map(fId => {
-                                    const front = fronts.find(f => f.id === fId);
-                                    return front ? front.name : '';
-                                }).filter(Boolean);
                                 
                                 return `
-                                    <div class="bg-white rounded-lg shadow-md border-2 ${status.color} ${status.textColor} p-6" data-okr-id="${okr.id}"
-                                         ondrop="dropOnOKR(event, '${okr.id}')" ondragover="allowDrop(event)">
+                                    <div class="bg-white rounded-lg shadow-md border-2 ${status.color} ${status.textColor} p-6" data-okr-id="${okr.id}">
                                         <div class="flex items-start justify-between mb-4">
                                             <div class="flex-1">
                                                 <h3 class="text-xl font-bold mb-2">${okr.objetivo}</h3>
@@ -2393,39 +2412,44 @@
                                                 </div>
                                             </div>
                                             <div class="flex items-center gap-2">
-                                                <button onclick="openFrontsRelationModal('${okr.id}')" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded transition-colors" aria-label="Relacionar frentes">
-                                                    <i class="fas fa-magnet mr-1" aria-hidden="true"></i> Relacionar Frentes
-                                                </button>
                                                 <button onclick="deleteOKR('${okr.id}')" class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded transition-colors" aria-label="Deletar OKR">
                                                     <i class="fas fa-trash" aria-hidden="true"></i>
                                                 </button>
                                             </div>
                                         </div>
                                         
-                                        ${relatedFrontsNames.length > 0 ? `
-                                            <div class="mb-4">
-                                                <p class="text-sm font-semibold text-slate-700 mb-2">Frentes Relacionadas:</p>
-                                                <div class="flex flex-wrap gap-2">
-                                                    ${relatedFrontsNames.map(name => `
-                                                        <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">${name}</span>
-                                                    `).join('')}
-                                                </div>
-                                            </div>
-                                        ` : ''}
-                                        
                                         <div class="space-y-3">
                                             ${okr.krs.map(kr => {
                                                 const krProgress = kr.target !== 0 ? (kr.realizado / kr.target) * 100 : 0;
+                                                const krRelatedFronts = (kr.relatedFronts || []).map(fId => {
+                                                    const front = fronts.find(f => f.id === fId);
+                                                    return front ? front.name : '';
+                                                }).filter(Boolean);
                                                 return `
-                                                    <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
-                                                        <div class="flex items-center justify-between mb-2">
+                                                    <div class="bg-slate-50 rounded-lg p-4 border border-slate-200" 
+                                                         ondrop="dropOnKR(event, '${okr.id}', '${kr.id}')" ondragover="allowDrop(event)">
+                                                        <div class="flex items-start justify-between mb-2">
                                                             <div class="flex-1">
-                                                                <h4 class="font-semibold text-slate-800">${kr.description}</h4>
+                                                                <div class="flex items-center justify-between mb-1">
+                                                                    <h4 class="font-semibold text-slate-800">${kr.description}</h4>
+                                                                    <button onclick="openFrontsRelationModal('${okr.id}', '${kr.id}')" class="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded transition-colors" aria-label="Relacionar frentes para este KR">
+                                                                        <i class="fas fa-magnet mr-1" aria-hidden="true"></i> Frentes
+                                                                    </button>
+                                                                </div>
                                                                 <div class="text-xs text-slate-600 mt-1">
                                                                     Baseline: ${kr.baseline} ${kr.unit} → Target: ${kr.target} ${kr.unit}
                                                                 </div>
+                                                                ${krRelatedFronts.length > 0 ? `
+                                                                    <div class="flex flex-wrap gap-1 mt-2">
+                                                                        ${krRelatedFronts.map(name => `
+                                                                            <span class="px-2 py-0.5 bg-blue-100 text-blue-800 rounded text-xs">${name}</span>
+                                                                        `).join('')}
+                                                                    </div>
+                                                                ` : `
+                                                                    <p class="text-xs text-slate-400 italic mt-1">Nenhuma frente relacionada</p>
+                                                                `}
                                                             </div>
-                                                            <div class="text-right">
+                                                            <div class="text-right ml-4">
                                                                 <div class="text-lg font-bold text-slate-900">${kr.realizado || 0} ${kr.unit}</div>
                                                                 <div class="text-xs text-slate-600">Var. MoM: ${kr.varMoM || 0}%</div>
                                                             </div>
@@ -2485,73 +2509,80 @@
                     </div>
                 ` : ''}
 
-                <!-- Modal de Relacionamento com Frentes -->
-                ${showingFrontsRelationModal ? `
-                    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeFrontsRelationModal()" role="dialog" aria-modal="true">
-                        <div class="bg-white rounded-lg shadow-2xl max-w-3xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
-                            <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
-                                <h2 class="text-2xl font-bold text-slate-900">Relacionar Frentes de Engenharia</h2>
-                                <button onclick="closeFrontsRelationModal()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors" aria-label="Fechar modal">
-                                    <i class="fas fa-times text-slate-600 text-xl" aria-hidden="true"></i>
-                                </button>
-                            </div>
-                            <div class="p-6">
-                                <p class="text-sm text-slate-600 mb-4">Arraste as frentes da lista abaixo para associá-las ao OKR, ou clique para adicionar/remover.</p>
-                                
-                                <div class="grid grid-cols-2 gap-6">
+                <!-- Modal de Relacionamento com Frentes (por KR) -->
+                ${showingFrontsRelationModal ? (() => {
+                    const [okrId, krId] = showingFrontsRelationModal.split('|');
+                    const okr = okrs.find(o => o.id === okrId);
+                    if (!okr) return '';
+                    const kr = okr.krs.find(k => k.id === krId);
+                    if (!kr) return '';
+                    
+                    const krRelatedFronts = kr.relatedFronts || [];
+                    const availableFronts = fronts.filter(f => !krRelatedFronts.includes(f.id));
+                    
+                    return `
+                        <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeFrontsRelationModal()" role="dialog" aria-modal="true">
+                            <div class="bg-white rounded-lg shadow-2xl max-w-3xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                                <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
                                     <div>
-                                        <h3 class="font-semibold text-slate-800 mb-3">Frentes Disponíveis</h3>
-                                        <div class="space-y-2 max-h-96 overflow-y-auto">
-                                            ${fronts.filter(f => {
-                                                const okr = okrs.find(o => o.id === showingFrontsRelationModal);
-                                                return okr && !okr.relatedFronts.includes(f.id);
-                                            }).map(front => `
-                                                <div draggable="true" ondragstart="dragStart(event, '${front.id}')" 
-                                                     class="p-3 bg-slate-100 hover:bg-slate-200 rounded cursor-move border border-slate-300">
-                                                    <div class="flex items-center gap-2">
-                                                        <i class="fas fa-grip-vertical text-slate-400" aria-hidden="true"></i>
-                                                        <span class="font-medium text-slate-700">${front.name}</span>
-                                                    </div>
-                                                </div>
-                                            `).join('')}
-                                        </div>
+                                        <h2 class="text-2xl font-bold text-slate-900">Relacionar Frentes para o KR</h2>
+                                        <p class="text-sm text-slate-600 mt-1">${kr.description}</p>
                                     </div>
-                                    <div>
-                                        <h3 class="font-semibold text-slate-800 mb-3">Frentes Relacionadas</h3>
-                                        <div class="space-y-2 max-h-96 overflow-y-auto" 
-                                             ondrop="dropOnOKR(event, '${showingFrontsRelationModal}')" 
-                                             ondragover="allowDrop(event)">
-                                            ${(() => {
-                                                const okr = okrs.find(o => o.id === showingFrontsRelationModal);
-                                                if (!okr || !okr.relatedFronts || okr.relatedFronts.length === 0) {
-                                                    return '<p class="text-sm text-slate-500 italic">Arraste frentes aqui ou selecione abaixo</p>';
-                                                }
-                                                return okr.relatedFronts.map(fId => {
+                                    <button onclick="closeFrontsRelationModal()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors" aria-label="Fechar modal">
+                                        <i class="fas fa-times text-slate-600 text-xl" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                                <div class="p-6">
+                                    <p class="text-sm text-slate-600 mb-4">Arraste as frentes da lista abaixo para associá-las a este Resultado-Chave, ou clique para adicionar/remover múltiplas frentes.</p>
+                                    
+                                    <div class="grid grid-cols-2 gap-6">
+                                        <div>
+                                            <h3 class="font-semibold text-slate-800 mb-3">Frentes Disponíveis</h3>
+                                            <div class="space-y-2 max-h-96 overflow-y-auto">
+                                                ${availableFronts.length > 0 ? availableFronts.map(front => `
+                                                    <div draggable="true" ondragstart="dragStart(event, '${front.id}')" 
+                                                         onclick="addFrontToKR('${okrId}', '${krId}', '${front.id}')"
+                                                         class="p-3 bg-slate-100 hover:bg-slate-200 rounded cursor-move border border-slate-300 transition-colors">
+                                                        <div class="flex items-center gap-2">
+                                                            <i class="fas fa-grip-vertical text-slate-400" aria-hidden="true"></i>
+                                                            <span class="font-medium text-slate-700">${front.name}</span>
+                                                        </div>
+                                                        <p class="text-xs text-slate-500 mt-1">Clique para adicionar</p>
+                                                    </div>
+                                                `).join('') : '<p class="text-sm text-slate-400 italic">Todas as frentes já estão relacionadas</p>'}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <h3 class="font-semibold text-slate-800 mb-3">Frentes Relacionadas</h3>
+                                            <div class="space-y-2 max-h-96 overflow-y-auto" 
+                                                 ondrop="dropOnKR(event, '${okrId}', '${krId}')" 
+                                                 ondragover="allowDrop(event)">
+                                                ${krRelatedFronts.length > 0 ? krRelatedFronts.map(fId => {
                                                     const front = fronts.find(f => f.id === fId);
                                                     if (!front) return '';
                                                     return `
                                                         <div class="p-3 bg-blue-100 border border-blue-300 rounded flex items-center justify-between">
                                                             <span class="font-medium text-blue-800">${front.name}</span>
-                                                            <button onclick="removeFrontFromOKR('${showingFrontsRelationModal}', '${fId}')" class="text-red-500 hover:text-red-700" aria-label="Remover">
+                                                            <button onclick="removeFrontFromKR('${okrId}', '${krId}', '${fId}')" class="text-red-500 hover:text-red-700" aria-label="Remover">
                                                                 <i class="fas fa-times" aria-hidden="true"></i>
                                                             </button>
                                                         </div>
                                                     `;
-                                                }).join('');
-                                            })()}
+                                                }).join('') : '<p class="text-sm text-slate-500 italic">Arraste frentes aqui ou clique nas frentes disponíveis</p>'}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                
-                                <div class="flex gap-3 pt-6 border-t border-slate-200 mt-6">
-                                    <button onclick="closeFrontsRelationModal()" class="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors">
-                                        <i class="fas fa-check mr-2" aria-hidden="true"></i> Fechar
-                                    </button>
+                                    
+                                    <div class="flex gap-3 pt-6 border-t border-slate-200 mt-6">
+                                        <button onclick="closeFrontsRelationModal()" class="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors">
+                                            <i class="fas fa-check mr-2" aria-hidden="true"></i> Fechar
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                ` : ''}
+                    `;
+                })() : ''}
             `;
         }
 
