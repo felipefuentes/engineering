@@ -1432,6 +1432,9 @@
                                 <p class="text-slate-600 mt-1 text-sm">Ferramenta Executiva de Storytelling de Confiabilidade</p>
                             </div>
                             <nav class="flex items-center gap-3" aria-label="Navegação principal">
+                                <button onclick="navigateTo('dashboard')" class="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para Dashboard">
+                                    <i class="fas fa-home mr-1" aria-hidden="true"></i> Dashboard
+                                </button>
                                 <input id="import-input-fronts" type="file" accept="application/json" class="hidden" onchange="handleImportFile(this)" aria-label="Selecionar arquivo para importar">
                                 <button onclick="exportData()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm" aria-label="Exportar dados">
                                     <i class="fas fa-file-export mr-1" aria-hidden="true"></i> Exportar
@@ -1440,7 +1443,7 @@
                                     <i class="fas fa-file-import mr-1" aria-hidden="true"></i> Importar
                                 </button>
                                 <button onclick="navigateTo('journeys')" class="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para página de Jornadas">
-                                    <i class="fas fa-arrow-right mr-1" aria-hidden="true"></i> Jornadas
+                                    <i class="fas fa-route mr-1" aria-hidden="true"></i> Jornadas
                                 </button>
                             </nav>
                         </div>
@@ -2159,15 +2162,15 @@
                                 <p class="text-slate-600 mt-1 text-sm">Defina e acompanhe objetivos e resultados-chave</p>
                             </div>
                             <nav class="flex items-center gap-2" aria-label="Navegação principal">
+                                <button onclick="navigateTo('dashboard')" class="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para Dashboard">
+                                    <i class="fas fa-home mr-1" aria-hidden="true"></i> Dashboard
+                                </button>
                                 <input id="import-input-okrs" type="file" accept=".csv,.xlsx,.xls" class="hidden">
                                 <button onclick="exportOKRsToCSV()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm" aria-label="Exportar OKRs">
                                     <i class="fas fa-file-export mr-1" aria-hidden="true"></i> Exportar
                                 </button>
                                 <button onclick="document.getElementById('import-input-okrs').click()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm" aria-label="Importar OKRs">
                                     <i class="fas fa-file-import mr-1" aria-hidden="true"></i> Importar
-                                </button>
-                                <button onclick="navigateTo('dashboard')" class="px-3 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors text-sm">
-                                    <i class="fas fa-home mr-1" aria-hidden="true"></i> Dashboard
                                 </button>
                             </nav>
                         </div>
@@ -2489,15 +2492,15 @@
                                 <p class="text-slate-600 mt-1 text-sm">Run the Bank - Alimentação mensal de métricas</p>
                             </div>
                             <nav class="flex items-center gap-2" aria-label="Navegação principal">
+                                <button onclick="navigateTo('dashboard')" class="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para Dashboard">
+                                    <i class="fas fa-home mr-1" aria-hidden="true"></i> Dashboard
+                                </button>
                                 <input id="import-input-indicators" type="file" accept=".csv,.xlsx,.xls" class="hidden">
                                 <button onclick="exportIndicatorsToCSV()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm" aria-label="Exportar Indicadores">
                                     <i class="fas fa-file-export mr-1" aria-hidden="true"></i> Exportar
                                 </button>
                                 <button onclick="document.getElementById('import-input-indicators').click()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm" aria-label="Importar Indicadores">
                                     <i class="fas fa-file-import mr-1" aria-hidden="true"></i> Importar
-                                </button>
-                                <button onclick="navigateTo('dashboard')" class="px-3 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors text-sm">
-                                    <i class="fas fa-home mr-1" aria-hidden="true"></i> Dashboard
                                 </button>
                             </nav>
                         </div>
@@ -2611,24 +2614,24 @@
                                 <h1 class="text-3xl font-bold text-slate-900">Maturidade de Jornadas</h1>
                                 <p class="text-slate-600 mt-1 text-sm">Avaliação de maturidade por pilar</p>
                             </div>
-                            <div class="flex items-center gap-3">
-                                <button onclick="navigateTo('fronts')" class="px-3 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors text-sm">
-                                    <i class="fas fa-arrow-left mr-1"></i> Voltar
+                            <nav class="flex items-center gap-3" aria-label="Navegação principal">
+                                <button onclick="navigateTo('dashboard')" class="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para Dashboard">
+                                    <i class="fas fa-home mr-1" aria-hidden="true"></i> Dashboard
                                 </button>
                                 <button onclick="openNewJourneyModal()" class="px-3 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors text-sm">
-                                    <i class="fas fa-plus mr-1"></i> Nova Jornada
+                                    <i class="fas fa-plus mr-1" aria-hidden="true"></i> Nova Jornada
                                 </button>
                                 <button onclick="resetJourneys()" class="px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded transition-colors text-sm">
-                                    <i class="fas fa-redo mr-1"></i> Reset Jornadas
+                                    <i class="fas fa-redo mr-1" aria-hidden="true"></i> Reset Jornadas
                                 </button>
                                 <input id="import-input-journeys" type="file" accept="application/json" class="hidden" onchange="handleImportFile(this)">
-                                <button onclick="exportData()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm">
-                                    <i class="fas fa-file-export mr-1"></i> Exportar
+                                <button onclick="exportData()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm" aria-label="Exportar dados">
+                                    <i class="fas fa-file-export mr-1" aria-hidden="true"></i> Exportar
                                 </button>
-                                <button onclick="document.getElementById('import-input-journeys').click()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm">
-                                    <i class="fas fa-file-import mr-1"></i> Importar
+                                <button onclick="document.getElementById('import-input-journeys').click()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm" aria-label="Importar dados">
+                                    <i class="fas fa-file-import mr-1" aria-hidden="true"></i> Importar
                                 </button>
-                            </div>
+                            </nav>
                         </div>
                     </div>
                 </header>
