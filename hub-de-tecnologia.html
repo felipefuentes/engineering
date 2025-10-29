@@ -76,6 +76,24 @@
         .tag-pillar { background-color: #dbeafe; color: #1e40af; }
         .tag-attribute { background-color: #f0fdf4; color: #166534; }
         .tag-mttr { background-color: #fef3c7; color: #92400e; }
+        /* F1 Dashboard Styles */
+        .speedometer-container { position: relative; width: 200px; height: 200px; margin: 0 auto; }
+        .speedometer-circle { transform: rotate(-90deg); }
+        .speedometer-arc { fill: none; stroke-width: 20; stroke-linecap: round; }
+        .speedometer-bg { stroke: #e5e7eb; }
+        .speedometer-value { stroke: #3b82f6; stroke-dasharray: 565.48; transition: stroke-dashoffset 0.8s ease-in-out; }
+        .speedometer-value-red { stroke: #ef4444; }
+        .speedometer-value-yellow { stroke: #fbbf24; }
+        .speedometer-text { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); font-size: 2rem; font-weight: bold; color: #1e293b; text-align: center; }
+        .speedometer-label { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); font-size: 0.875rem; color: #64748b; text-align: center; }
+        .f1-lap-time { display: inline-flex; align-items: center; gap: 0.5rem; font-family: 'Courier New', monospace; font-size: 1.5rem; font-weight: bold; color: #1e293b; }
+        .f1-sector { display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.875rem; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; }
+        .f1-sector-best { background-color: #dcfce7; color: #166534; }
+        .f1-sector-good { background-color: #fef3c7; color: #92400e; }
+        .f1-sector-poor { background-color: #fee2e2; color: #991b1b; }
+        .telemetry-row { font-family: 'Courier New', monospace; }
+        .telemetry-label { color: #64748b; }
+        .telemetry-value { color: #1e293b; font-weight: 600; }
         /* Acessibilidade: classe para elementos visuais apenas para leitores de tela */
         .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0; }
     </style>
@@ -1492,6 +1510,50 @@
             return Math.max(0, Math.min(100, score));
         }
 
+        function renderSpeedometer(value, label, colorClass = 'speedometer-value') {
+            const percentage = value / 100;
+            const circumference = 2 * Math.PI * 90; // radius = 90
+            const offset = circumference - (percentage * circumference);
+            
+            const strokeColor = value < 60 ? '#ef4444' : value < 80 ? '#fbbf24' : '#3b82f6';
+            
+            return `
+                <div class="speedometer-container">
+                    <svg class="speedometer-circle" width="200" height="200">
+                        <circle cx="100" cy="100" r="90" class="speedometer-arc speedometer-bg"></circle>
+                        <circle cx="100" cy="100" r="90" 
+                                class="speedometer-arc ${colorClass}" 
+                                stroke="${strokeColor}"
+                                style="stroke-dashoffset: ${offset}"></circle>
+                    </svg>
+                    <div class="speedometer-text">${Math.round(value)}</div>
+                    <div class="speedometer-label">${label}</div>
+                </div>
+            `;
+        }
+
+        function renderLapTime(timeInMs, sector1 = null, sector2 = null, sector3 = null) {
+            const minutes = Math.floor(timeInMs / 60000);
+            const seconds = Math.floor((timeInMs % 60000) / 1000);
+            const milliseconds = Math.floor((timeInMs % 1000) / 10);
+            
+            const sectors = [];
+            if (sector1 !== null) sectors.push({ value: sector1, label: 'S1' });
+            if (sector2 !== null) sectors.push({ value: sector2, label: 'S2' });
+            if (sector3 !== null) sectors.push({ value: sector3, label: 'S3' });
+            
+            return `
+                <div class="f1-lap-time">
+                    ${minutes}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}
+                    ${sectors.map(s => `
+                        <span class="f1-sector ${s.value > 80 ? 'f1-sector-best' : s.value > 60 ? 'f1-sector-good' : 'f1-sector-poor'}">
+                            ${s.label}
+                        </span>
+                    `).join('')}
+                </div>
+            `;
+        }
+
         function getJourneysMaturitySummary() {
             if (!journeys || journeys.length === 0) return { average: 0, byPillar: {} };
             
@@ -1608,90 +1670,96 @@
                             </button>
                         </div>
                         
-                        <!-- Card de Health Score -->
-                        <div class="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl shadow-xl p-6 mb-6 text-white">
-                            <div class="flex items-center justify-between mb-4">
-                                <div>
-                                    <h3 class="text-lg font-semibold opacity-90 mb-1">Health Score Operacional</h3>
-                                    <p class="text-sm opacity-75">Medida de saúde do ambiente de TI</p>
-                                </div>
-                                <i class="fas fa-heartbeat text-4xl opacity-80"></i>
-                            </div>
-                            <div class="flex items-baseline gap-3">
-                                <div class="text-5xl font-bold">${indicatorsInsights.summary.healthScore}</div>
-                                <span class="text-2xl opacity-75">/ 100</span>
-                            </div>
-                            <div class="mt-4 h-2 bg-white/20 rounded-full overflow-hidden">
-                                <div class="h-full bg-white rounded-full transition-all duration-1000" style="width: ${indicatorsInsights.summary.healthScore}%"></div>
-                            </div>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                            <!-- Incidentes -->
-                            <div class="bg-white rounded-lg shadow-md border-2 ${indicatorsInsights.trends.incidents > 10 ? 'border-red-300' : indicatorsInsights.trends.incidents < -10 ? 'border-green-300' : 'border-slate-200'} p-5">
-                                <div class="flex items-center justify-between mb-3">
-                                    <div class="p-2 bg-blue-100 rounded-lg">
-                                        <i class="fas fa-exclamation-circle text-blue-600 text-xl"></i>
-                                    </div>
-                                    ${indicatorsInsights.trends.incidents !== 0 ? `
-                                        <div class="flex items-center gap-1 ${indicatorsInsights.trends.incidents > 0 ? 'text-red-600' : 'text-green-600'}">
-                                            <i class="fas fa-${indicatorsInsights.trends.incidents > 0 ? 'arrow-up' : 'arrow-down'} text-xs"></i>
-                                            <span class="text-xs font-semibold">${Math.abs(indicatorsInsights.trends.incidents).toFixed(1)}%</span>
-                                        </div>
-                                    ` : ''}
-                                </div>
-                                <h3 class="text-3xl font-bold text-slate-900 mb-1">${indicatorsInsights.totals.incidents}</h3>
-                                <p class="text-sm text-slate-600">Incidentes Funcionais</p>
+                        <!-- Telemetria F1 Style -->
+                        <div class="bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl shadow-xl p-6 mb-6 text-white relative overflow-hidden">
+                            <!-- Background pattern -->
+                            <div class="absolute inset-0 opacity-10">
+                                <div class="absolute inset-0" style="background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255,255,255,0.1) 10px, rgba(255,255,255,0.1) 20px);"></div>
                             </div>
                             
-                            <!-- Mudanças -->
-                            <div class="bg-white rounded-lg shadow-md border-2 ${indicatorsInsights.trends.changes > 20 ? 'border-green-300' : 'border-slate-200'} p-5">
-                                <div class="flex items-center justify-between mb-3">
-                                    <div class="p-2 bg-purple-100 rounded-lg">
-                                        <i class="fas fa-sync-alt text-purple-600 text-xl"></i>
+                            <div class="relative z-10">
+                                <!-- Header -->
+                                <div class="flex items-center justify-between mb-6">
+                                    <div>
+                                        <h3 class="text-xl font-bold mb-1 flex items-center gap-2">
+                                            <i class="fas fa-tachometer-alt text-red-500"></i>
+                                            TELEMETRIA OPERACIONAL
+                                        </h3>
+                                        <p class="text-sm opacity-75 text-gray-300">Live Data - Último Mês</p>
                                     </div>
-                                    ${indicatorsInsights.trends.changes !== 0 ? `
-                                        <div class="flex items-center gap-1 text-green-600">
-                                            <i class="fas fa-arrow-up text-xs"></i>
-                                            <span class="text-xs font-semibold">${Math.abs(indicatorsInsights.trends.changes).toFixed(1)}%</span>
-                                        </div>
-                                    ` : ''}
-                                </div>
-                                <h3 class="text-3xl font-bold text-slate-900 mb-1">${indicatorsInsights.totals.changes}</h3>
-                                <p class="text-sm text-slate-600">Mudanças Realizadas</p>
-                            </div>
-                            
-                            <!-- Alertas -->
-                            <div class="bg-white rounded-lg shadow-md border-2 ${indicatorsInsights.trends.alerts > 10 ? 'border-yellow-300' : 'border-slate-200'} p-5">
-                                <div class="flex items-center justify-between mb-3">
-                                    <div class="p-2 bg-yellow-100 rounded-lg">
-                                        <i class="fas fa-bell text-yellow-600 text-xl"></i>
+                                    <div class="text-sm opacity-75 text-right">
+                                        <div class="font-semibold">${['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][new Date().getDay()]}</div>
+                                        <div class="font-mono">${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
                                     </div>
-                                    ${indicatorsInsights.trends.alerts !== 0 ? `
-                                        <div class="flex items-center gap-1 ${indicatorsInsights.trends.alerts > 0 ? 'text-yellow-600' : 'text-green-600'}">
-                                            <i class="fas fa-${indicatorsInsights.trends.alerts > 0 ? 'arrow-up' : 'arrow-down'} text-xs"></i>
-                                            <span class="text-xs font-semibold">${Math.abs(indicatorsInsights.trends.alerts).toFixed(1)}%</span>
-                                        </div>
-                                    ` : ''}
                                 </div>
-                                <h3 class="text-3xl font-bold text-slate-900 mb-1">${indicatorsInsights.totals.alerts}</h3>
-                                <p class="text-sm text-slate-600">Alertas Recebidos</p>
-                            </div>
-                            
-                            <!-- Abends -->
-                            <div class="bg-white rounded-lg shadow-md border-2 ${indicatorsInsights.totals.abends > 0 ? 'border-red-300' : 'border-green-300'} p-5">
-                                <div class="flex items-center justify-between mb-3">
-                                    <div class="p-2 bg-red-100 rounded-lg">
-                                        <i class="fas fa-bug text-red-600 text-xl"></i>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                                    <!-- Health Score -->
+                                    ${renderSpeedometer(indicatorsInsights.summary.healthScore, 'HEALTH', 'speedometer-value')}
+                                    
+                                    <!-- Velocímetros por categoria -->
+                                    ${(() => {
+                                        const maxIncidents = 100;
+                                        const maxChanges = 50;
+                                        const maxAlerts = 300;
+                                        const incidentsPercentage = Math.min((indicatorsInsights.totals.incidents / maxIncidents) * 100, 100);
+                                        const changesPercentage = Math.min((indicatorsInsights.totals.changes / maxChanges) * 100, 100);
+                                        const alertsPercentage = Math.min((indicatorsInsights.totals.alerts / maxAlerts) * 100, 100);
+                                        
+                                        return `
+                                            ${renderSpeedometer(incidentsPercentage, 'INCIDENTS', 'speedometer-value-red')}
+                                            ${renderSpeedometer(changesPercentage, 'CHANGES', 'speedometer-value')}
+                                            ${renderSpeedometer(alertsPercentage, 'ALERTS', 'speedometer-value-yellow')}
+                                        `;
+                                    })()}
+                                </div>
+                                
+                                <!-- Lap Times / Tempos -->
+                                <div class="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div class="bg-black/30 rounded-lg p-4">
+                                        <div class="text-xs text-gray-400 mb-2">LAP TIME</div>
+                                        ${renderLapTime((100 - indicatorsInsights.summary.healthScore) * 120000, Math.min(indicatorsInsights.totals.incidents * 10, 100), Math.min(indicatorsInsights.totals.abends * 20, 100), indicatorsInsights.summary.healthScore)}
                                     </div>
-                                    ${indicatorsInsights.totals.abends === 0 ? `
-                                        <div class="flex items-center gap-1 text-green-600">
-                                            <i class="fas fa-check-circle text-xs"></i>
+                                    <div class="bg-black/30 rounded-lg p-4">
+                                        <div class="text-xs text-gray-400 mb-2">INCIDENTS</div>
+                                        <div class="telemetry-row">
+                                            <div class="flex justify-between text-sm mb-1">
+                                                <span class="telemetry-label">TOTAL</span>
+                                                <span class="telemetry-value">${indicatorsInsights.totals.incidents}</span>
+                                            </div>
+                                            <div class="flex justify-between text-sm">
+                                                <span class="telemetry-label">TREND</span>
+                                                <span class="telemetry-value ${indicatorsInsights.trends.incidents > 0 ? 'text-red-400' : 'text-green-400'}">${indicatorsInsights.trends.incidents > 0 ? '+' : ''}${indicatorsInsights.trends.incidents.toFixed(1)}%</span>
+                                            </div>
                                         </div>
-                                    ` : ''}
+                                    </div>
+                                    <div class="bg-black/30 rounded-lg p-4">
+                                        <div class="text-xs text-gray-400 mb-2">CHANGES</div>
+                                        <div class="telemetry-row">
+                                            <div class="flex justify-between text-sm mb-1">
+                                                <span class="telemetry-label">DEPLOYED</span>
+                                                <span class="telemetry-value">${indicatorsInsights.totals.changes}</span>
+                                            </div>
+                                            <div class="flex justify-between text-sm">
+                                                <span class="telemetry-label">TREND</span>
+                                                <span class="telemetry-value text-green-400">+${indicatorsInsights.trends.changes.toFixed(1)}%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-black/30 rounded-lg p-4">
+                                        <div class="text-xs text-gray-400 mb-2">ALERTS</div>
+                                        <div class="telemetry-row">
+                                            <div class="flex justify-between text-sm mb-1">
+                                                <span class="telemetry-label">ACTIVE</span>
+                                                <span class="telemetry-value">${indicatorsInsights.totals.alerts}</span>
+                                            </div>
+                                            <div class="flex justify-between text-sm">
+                                                <span class="telemetry-label">TREND</span>
+                                                <span class="telemetry-value ${indicatorsInsights.trends.alerts > 0 ? 'text-yellow-400' : 'text-green-400'}">${indicatorsInsights.trends.alerts > 0 ? '+' : ''}${indicatorsInsights.trends.alerts.toFixed(1)}%</span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <h3 class="text-3xl font-bold text-slate-900 mb-1">${indicatorsInsights.totals.abends}</h3>
-                                <p class="text-sm text-slate-600">Abends Abertos</p>
                             </div>
                         </div>
                         
