@@ -1403,6 +1403,95 @@
             };
         }
 
+        function getExecutiveIndicatorsInsights() {
+            const currentMonth = new Date().getMonth() + 1;
+            const currentYear = new Date().getFullYear();
+            
+            // Calcular totais para o último mês disponível
+            const getLastMonthValue = (pilar, indicador) => {
+                // Tentar mês atual, depois mês anterior
+                for (let monthOffset = 0; monthOffset >= -2; monthOffset--) {
+                    const targetDate = new Date(currentYear, currentMonth - 1 + monthOffset, 1);
+                    const monthYearKey = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
+                    const value = indicators[pilar]?.[indicador]?.[monthYearKey];
+                    if (value !== undefined && value !== '') {
+                        return parseFloat(value) || 0;
+                    }
+                }
+                return 0;
+            };
+            
+            // Calcular totais do último mês
+            const lastMonthIncidents = getLastMonthValue('Gestão de Incidentes', 'Volume de Abertura de Incidentes Funcionais');
+            const lastMonthChanges = getLastMonthValue('Gestão de Mudanças', 'Volume de Mudanças Realizadas');
+            const lastMonthAlerts = getLastMonthValue('Gestão de Alertas', 'Volume de Alertas Recebidos');
+            const lastMonthAbends = getLastMonthValue('Gestão de Abends', 'Volume de Abends Abertos');
+            
+            // Calcular variação nos últimos 3 meses
+            const calculateTrend = (pilar, indicador) => {
+                const values = [];
+                for (let i = 2; i >= 0; i--) {
+                    const targetDate = new Date(currentYear, currentMonth - 1 - i, 1);
+                    const monthYearKey = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
+                    const value = indicators[pilar]?.[indicador]?.[monthYearKey];
+                    if (value !== undefined && value !== '') {
+                        values.push(parseFloat(value) || 0);
+                    } else {
+                        values.push(0);
+                    }
+                }
+                
+                if (values.length >= 2) {
+                    const latest = values[values.length - 1];
+                    const previous = values[values.length - 2];
+                    if (previous !== 0) {
+                        return ((latest - previous) / previous) * 100;
+                    }
+                }
+                return 0;
+            };
+            
+            return {
+                totals: {
+                    incidents: lastMonthIncidents,
+                    changes: lastMonthChanges,
+                    alerts: lastMonthAlerts,
+                    abends: lastMonthAbends
+                },
+                trends: {
+                    incidents: calculateTrend('Gestão de Incidentes', 'Volume de Abertura de Incidentes Funcionais'),
+                    changes: calculateTrend('Gestão de Mudanças', 'Volume de Mudanças Realizadas'),
+                    alerts: calculateTrend('Gestão de Alertas', 'Volume de Alertas Recebidos'),
+                    abends: calculateTrend('Gestão de Abends', 'Volume de Abends Abertos')
+                },
+                summary: {
+                    totalActivity: lastMonthIncidents + lastMonthChanges + lastMonthAlerts + lastMonthAbends,
+                    healthScore: calculateHealthScore(lastMonthIncidents, lastMonthChanges, lastMonthAlerts, lastMonthAbends)
+                }
+            };
+        }
+        
+        function calculateHealthScore(incidents, changes, alerts, abends) {
+            // Score baseado em heurísticas de saúde operacional
+            // Quanto menos incidentes e abends, melhor
+            // Mudanças consistentes e alertas controlados = bom
+            let score = 100;
+            
+            // Penalidades
+            if (incidents > 50) score -= 20;
+            else if (incidents > 20) score -= 10;
+            
+            if (abends > 10) score -= 15;
+            else if (abends > 5) score -= 8;
+            
+            if (alerts > 200) score -= 10;
+            
+            // Bonificações
+            if (changes > 0 && incidents < 10) score += 5;
+            
+            return Math.max(0, Math.min(100, score));
+        }
+
         function getJourneysMaturitySummary() {
             if (!journeys || journeys.length === 0) return { average: 0, byPillar: {} };
             
@@ -1439,6 +1528,7 @@
             const okrStats = calculateOKRProgress();
             const frontsStats = getFrontsMaturitySummary();
             const journeysStats = getJourneysMaturitySummary();
+            const indicatorsInsights = getExecutiveIndicatorsInsights();
             
             return `
                 <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
@@ -1507,6 +1597,122 @@
                         <button onclick="navigateTo('okrs')" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors">
                             <i class="fas fa-arrow-right mr-2" aria-hidden="true"></i> Ver Todos os OKRs
                         </button>
+                    </section>
+
+                    <!-- Indicadores Operacionais Executivos -->
+                    <section class="mb-8" aria-labelledby="indicators-section">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 id="indicators-section" class="text-2xl font-bold text-slate-900">Run the Bank - Indicadores Operacionais</h2>
+                            <button onclick="navigateTo('indicators')" class="px-3 py-1.5 bg-purple-500 hover:bg-purple-600 text-white text-sm font-semibold rounded transition-colors">
+                                <i class="fas fa-chart-line mr-1" aria-hidden="true"></i> Ver Detalhes
+                            </button>
+                        </div>
+                        
+                        <!-- Card de Health Score -->
+                        <div class="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl shadow-xl p-6 mb-6 text-white">
+                            <div class="flex items-center justify-between mb-4">
+                                <div>
+                                    <h3 class="text-lg font-semibold opacity-90 mb-1">Health Score Operacional</h3>
+                                    <p class="text-sm opacity-75">Medida de saúde do ambiente de TI</p>
+                                </div>
+                                <i class="fas fa-heartbeat text-4xl opacity-80"></i>
+                            </div>
+                            <div class="flex items-baseline gap-3">
+                                <div class="text-5xl font-bold">${indicatorsInsights.summary.healthScore}</div>
+                                <span class="text-2xl opacity-75">/ 100</span>
+                            </div>
+                            <div class="mt-4 h-2 bg-white/20 rounded-full overflow-hidden">
+                                <div class="h-full bg-white rounded-full transition-all duration-1000" style="width: ${indicatorsInsights.summary.healthScore}%"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <!-- Incidentes -->
+                            <div class="bg-white rounded-lg shadow-md border-2 ${indicatorsInsights.trends.incidents > 10 ? 'border-red-300' : indicatorsInsights.trends.incidents < -10 ? 'border-green-300' : 'border-slate-200'} p-5">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="p-2 bg-blue-100 rounded-lg">
+                                        <i class="fas fa-exclamation-circle text-blue-600 text-xl"></i>
+                                    </div>
+                                    ${indicatorsInsights.trends.incidents !== 0 ? `
+                                        <div class="flex items-center gap-1 ${indicatorsInsights.trends.incidents > 0 ? 'text-red-600' : 'text-green-600'}">
+                                            <i class="fas fa-${indicatorsInsights.trends.incidents > 0 ? 'arrow-up' : 'arrow-down'} text-xs"></i>
+                                            <span class="text-xs font-semibold">${Math.abs(indicatorsInsights.trends.incidents).toFixed(1)}%</span>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                <h3 class="text-3xl font-bold text-slate-900 mb-1">${indicatorsInsights.totals.incidents}</h3>
+                                <p class="text-sm text-slate-600">Incidentes Funcionais</p>
+                            </div>
+                            
+                            <!-- Mudanças -->
+                            <div class="bg-white rounded-lg shadow-md border-2 ${indicatorsInsights.trends.changes > 20 ? 'border-green-300' : 'border-slate-200'} p-5">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="p-2 bg-purple-100 rounded-lg">
+                                        <i class="fas fa-sync-alt text-purple-600 text-xl"></i>
+                                    </div>
+                                    ${indicatorsInsights.trends.changes !== 0 ? `
+                                        <div class="flex items-center gap-1 text-green-600">
+                                            <i class="fas fa-arrow-up text-xs"></i>
+                                            <span class="text-xs font-semibold">${Math.abs(indicatorsInsights.trends.changes).toFixed(1)}%</span>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                <h3 class="text-3xl font-bold text-slate-900 mb-1">${indicatorsInsights.totals.changes}</h3>
+                                <p class="text-sm text-slate-600">Mudanças Realizadas</p>
+                            </div>
+                            
+                            <!-- Alertas -->
+                            <div class="bg-white rounded-lg shadow-md border-2 ${indicatorsInsights.trends.alerts > 10 ? 'border-yellow-300' : 'border-slate-200'} p-5">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="p-2 bg-yellow-100 rounded-lg">
+                                        <i class="fas fa-bell text-yellow-600 text-xl"></i>
+                                    </div>
+                                    ${indicatorsInsights.trends.alerts !== 0 ? `
+                                        <div class="flex items-center gap-1 ${indicatorsInsights.trends.alerts > 0 ? 'text-yellow-600' : 'text-green-600'}">
+                                            <i class="fas fa-${indicatorsInsights.trends.alerts > 0 ? 'arrow-up' : 'arrow-down'} text-xs"></i>
+                                            <span class="text-xs font-semibold">${Math.abs(indicatorsInsights.trends.alerts).toFixed(1)}%</span>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                <h3 class="text-3xl font-bold text-slate-900 mb-1">${indicatorsInsights.totals.alerts}</h3>
+                                <p class="text-sm text-slate-600">Alertas Recebidos</p>
+                            </div>
+                            
+                            <!-- Abends -->
+                            <div class="bg-white rounded-lg shadow-md border-2 ${indicatorsInsights.totals.abends > 0 ? 'border-red-300' : 'border-green-300'} p-5">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="p-2 bg-red-100 rounded-lg">
+                                        <i class="fas fa-bug text-red-600 text-xl"></i>
+                                    </div>
+                                    ${indicatorsInsights.totals.abends === 0 ? `
+                                        <div class="flex items-center gap-1 text-green-600">
+                                            <i class="fas fa-check-circle text-xs"></i>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                                <h3 class="text-3xl font-bold text-slate-900 mb-1">${indicatorsInsights.totals.abends}</h3>
+                                <p class="text-sm text-slate-600">Abends Abertos</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Alerta Executivo -->
+                        ${indicatorsInsights.summary.healthScore < 70 ? `
+                            <div class="bg-red-50 border-2 border-red-200 rounded-lg p-4 flex items-start gap-3">
+                                <i class="fas fa-exclamation-triangle text-red-600 text-2xl mt-1"></i>
+                                <div>
+                                    <h4 class="font-semibold text-red-900 mb-1">Atenção Requerida</h4>
+                                    <p class="text-sm text-red-800">O Health Score está abaixo do esperado. Recomendamos análise detalhada dos indicadores para identificar ações corretivas.</p>
+                                </div>
+                            </div>
+                        ` : indicatorsInsights.summary.healthScore >= 90 ? `
+                            <div class="bg-green-50 border-2 border-green-200 rounded-lg p-4 flex items-start gap-3">
+                                <i class="fas fa-check-circle text-green-600 text-2xl mt-1"></i>
+                                <div>
+                                    <h4 class="font-semibold text-green-900 mb-1">Excelente Performance</h4>
+                                    <p class="text-sm text-green-800">Ambiente de TI operando com excelência. Health Score acima de 90 pontos.</p>
+                                </div>
+                            </div>
+                        ` : ''}
                     </section>
 
                     <!-- Cards de Evolução das Frentes -->
