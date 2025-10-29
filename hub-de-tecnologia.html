@@ -3,9 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Hub de Tecnologia - Ferramenta Executiva para gestão de frentes de engenharia, jornadas e maturidade de sistemas">
+    <meta name="keywords" content="engenharia, tecnologia, maturidade, gestão, incidentes, SRE">
+    <meta name="author" content="Engineering Team">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Hub de Tecnologia - Ferramenta Executiva">
+    <meta property="og:description" content="Gestão de frentes de engenharia, jornadas e maturidade de sistemas">
+    
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Hub de Tecnologia - Ferramenta Executiva">
+    <meta name="twitter:description" content="Gestão de frentes de engenharia, jornadas e maturidade de sistemas">
+    
     <title>Hub de Tecnologia - Ferramenta Executiva</title>
+    
+    <!-- Preconnect para melhorar performance de recursos externos -->
+    <link rel="preconnect" href="https://cdn.tailwindcss.com" crossorigin>
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+    
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Font Awesome com integridade e crossorigin -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" 
+          integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" 
+          crossorigin="anonymous" referrerpolicy="no-referrer">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
@@ -34,7 +58,7 @@
         .maturity-75 { background-color: #86efac; color: #15803d; }
         .maturity-100 { background-color: #4ade80; color: #166534; }
         .slider-container { display: flex; align-items: center; gap: 1rem; }
-        .slider-container input[type="range"] { flex: 1; padding: 0; height: 0.5rem; border: none; border-radius: 0.25rem; background: #e2e8f0; outline: none; -webkit-appearance: none; }
+        .slider-container input[type="range"] { flex: 1; padding: 0; height: 0.5rem; border: none; border-radius: 0.25rem; background: #e2e8f0; outline: none; -webkit-appearance: none; appearance: none; }
         .slider-container input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: #3b82f6; cursor: pointer; }
         .slider-container input[type="range"]::-moz-range-thumb { width: 1.5rem; height: 1.5rem; border-radius: 50%; background: #3b82f6; cursor: pointer; border: none; }
         .incident-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; }
@@ -52,10 +76,13 @@
         .tag-pillar { background-color: #dbeafe; color: #1e40af; }
         .tag-attribute { background-color: #f0fdf4; color: #166534; }
         .tag-mttr { background-color: #fef3c7; color: #92400e; }
+        /* Acessibilidade: classe para elementos visuais apenas para leitores de tela */
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0; }
     </style>
 </head>
 <body class="bg-gradient-to-br from-slate-50 to-slate-100">
-    <div id="app"></div>
+    <div id="app" role="main" aria-label="Aplicação Hub de Tecnologia"></div>
+    <div id="aria-live-region" role="status" aria-live="polite" aria-atomic="true" class="sr-only"></div>
 
     <script>
         // Dados padrão das Frentes de Engenharia
@@ -1059,18 +1086,18 @@
                                 <h1 class="text-3xl font-bold text-slate-900">Hub de Tecnologia</h1>
                                 <p class="text-slate-600 mt-1 text-sm">Ferramenta Executiva de Storytelling de Confiabilidade</p>
                             </div>
-                            <div class="flex items-center gap-3">
-                                <input id="import-input-fronts" type="file" accept="application/json" class="hidden" onchange="handleImportFile(this)">
-                                <button onclick="exportData()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm">
-                                    <i class="fas fa-file-export mr-1"></i> Exportar
+                            <nav class="flex items-center gap-3" aria-label="Navegação principal">
+                                <input id="import-input-fronts" type="file" accept="application/json" class="hidden" onchange="handleImportFile(this)" aria-label="Selecionar arquivo para importar">
+                                <button onclick="exportData()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm" aria-label="Exportar dados">
+                                    <i class="fas fa-file-export mr-1" aria-hidden="true"></i> Exportar
                                 </button>
-                                <button onclick="document.getElementById('import-input-fronts').click()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm">
-                                    <i class="fas fa-file-import mr-1"></i> Importar
+                                <button onclick="document.getElementById('import-input-fronts').click()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm" aria-label="Importar dados">
+                                    <i class="fas fa-file-import mr-1" aria-hidden="true"></i> Importar
                                 </button>
-                                <button onclick="navigateTo('journeys')" class="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors text-sm">
-                                    <i class="fas fa-arrow-right mr-1"></i> Jornadas
+                                <button onclick="navigateTo('journeys')" class="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para página de Jornadas">
+                                    <i class="fas fa-arrow-right mr-1" aria-hidden="true"></i> Jornadas
                                 </button>
-                            </div>
+                            </nav>
                         </div>
                     </div>
                 </header>
@@ -1078,17 +1105,17 @@
                 <main class="max-w-7xl mx-auto px-6 py-8">
                     <div class="flex items-center justify-between mb-6">
                         <div class="flex items-center gap-3">
-                            <button onclick="toggleFilter()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded transition-colors text-sm">
-                                <i class="fas fa-filter mr-2"></i> Filtros ${activeFiltersCount > 0 ? `(${activeFiltersCount})` : ''}
+                            <button onclick="toggleFilter()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded transition-colors text-sm" aria-label="${filtersExpanded ? 'Ocultar' : 'Mostrar'} painel de filtros" aria-expanded="${filtersExpanded}">
+                                <i class="fas fa-filter mr-2" aria-hidden="true"></i> Filtros ${activeFiltersCount > 0 ? `(${activeFiltersCount})` : ''}
                             </button>
-                            <span class="text-sm text-slate-600">${filteredFronts.length}/${fronts.length} Frentes</span>
+                            <span class="text-sm text-slate-600" role="status" aria-live="polite">${filteredFronts.length}/${fronts.length} Frentes</span>
                         </div>
                         <div class="flex items-center gap-3">
-                            <button onclick="openNewFront()" class="px-3 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors text-sm">
-                                <i class="fas fa-plus mr-1"></i> Novo
+                            <button onclick="openNewFront()" class="px-3 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Criar nova frente de engenharia">
+                                <i class="fas fa-plus mr-1" aria-hidden="true"></i> Novo
                             </button>
-                            <button onclick="resetFronts()" class="px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded transition-colors text-sm">
-                                <i class="fas fa-redo mr-1"></i> Reset
+                            <button onclick="resetFronts()" class="px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Restaurar frentes para os dados padrão">
+                                <i class="fas fa-redo mr-1" aria-hidden="true"></i> Reset
                             </button>
                         </div>
                     </div>
@@ -1097,8 +1124,8 @@
                         <div class="bg-white rounded-lg shadow-md p-6 mb-6 border-2 border-slate-200 filter-panel">
                             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                 <div>
-                                    <label class="block text-sm font-semibold text-slate-700 mb-3">Buscar por Nome</label>
-                                    <input type="text" placeholder="Digite o nome..." value="${filters.name}" onchange="updateFilterName(this.value)" class="w-full">
+                                    <label for="filter-name" class="block text-sm font-semibold text-slate-700 mb-3">Buscar por Nome</label>
+                                    <input type="text" id="filter-name" placeholder="Digite o nome..." value="${filters.name}" onchange="updateFilterName(this.value)" class="w-full" aria-label="Buscar frentes por nome">
                                 </div>
                                 <div>
                                     <label class="block text-sm font-semibold text-slate-700 mb-3">Status</label>
@@ -1163,8 +1190,8 @@
                                                     <p class="text-xs text-slate-600">${front.ownerName}</p>
                                                 </div>
                                             </div>
-                                            <button onclick="openEditFront('${front.id}')" class="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-600 hover:text-blue-600">
-                                                <i class="fas fa-edit"></i>
+                                            <button onclick="openEditFront('${front.id}')" class="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-600 hover:text-blue-600" aria-label="Editar frente ${front.name}">
+                                                <i class="fas fa-edit" aria-hidden="true"></i>
                                             </button>
                                         </div>
 
@@ -1186,8 +1213,8 @@
                                             ${front.mainObjectives.length > 2 ? `<p class="text-xs text-slate-500 italic">+${front.mainObjectives.length - 2} objetivo(s)</p>` : ''}
                                         </div>
 
-                                        <button onclick="openFrontDetail('${front.id}')" class="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors text-sm">
-                                            <i class="fas fa-eye mr-2"></i> Ver Detalhes
+                                        <button onclick="openFrontDetail('${front.id}')" class="w-full px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ver detalhes da frente ${front.name}">
+                                            <i class="fas fa-eye mr-2" aria-hidden="true"></i> Ver Detalhes
                                         </button>
                                     </div>
                                 `;
@@ -1208,20 +1235,20 @@
             const status = statusConfig[front.status];
 
             return `
-                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeFrontDetail()">
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeFrontDetail()" role="dialog" aria-modal="true" aria-labelledby="front-detail-title">
                     <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
                         <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
                             <div class="flex items-center gap-4">
-                                <div class="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-2xl">
+                                <div class="w-16 h-16 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold text-2xl" aria-hidden="true">
                                     ${front.ownerInitials}
                                 </div>
                                 <div>
-                                    <h2 class="text-2xl font-bold text-slate-900">${front.name}</h2>
+                                    <h2 id="front-detail-title" class="text-2xl font-bold text-slate-900">${front.name}</h2>
                                     <p class="text-sm text-slate-600">${front.ownerName}</p>
                                 </div>
                             </div>
-                            <button onclick="closeFrontDetail()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors">
-                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            <button onclick="closeFrontDetail()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors" aria-label="Fechar modal de detalhes">
+                                <i class="fas fa-times text-slate-600 text-xl" aria-hidden="true"></i>
                             </button>
                         </div>
 
