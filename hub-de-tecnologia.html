@@ -770,9 +770,110 @@
             const journey = journeys.find(j => j.id === journeyId);
             if (journey) {
                 journey.maturity[pillar][attribute] = parseInt(value);
+                
+                // Salvar histórico de maturidade
+                if (!journey.maturityHistory) journey.maturityHistory = [];
+                const today = new Date().toISOString().split('T')[0];
+                const overallMaturity = Math.round((
+                    calculatePillarMaturity(journey, 'availability') +
+                    calculatePillarMaturity(journey, 'quality') +
+                    calculatePillarMaturity(journey, 'security') +
+                    calculatePillarMaturity(journey, 'performance')
+                ) / 4);
+                
+                // Verificar se já existe snapshot para hoje
+                const todaySnapshot = journey.maturityHistory.find(s => s.date === today);
+                if (todaySnapshot) {
+                    todaySnapshot.overall = overallMaturity;
+                    todaySnapshot[pillar] = calculatePillarMaturity(journey, pillar);
+                } else {
+                    journey.maturityHistory.push({
+                        date: today,
+                        overall: overallMaturity,
+                        availability: calculatePillarMaturity(journey, 'availability'),
+                        quality: calculatePillarMaturity(journey, 'quality'),
+                        security: calculatePillarMaturity(journey, 'security'),
+                        performance: calculatePillarMaturity(journey, 'performance')
+                    });
+                }
+                
+                // Manter apenas últimos 12 meses
+                journey.maturityHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
+                if (journey.maturityHistory.length > 12) {
+                    journey.maturityHistory = journey.maturityHistory.slice(0, 12);
+                }
+                
                 saveJourneys();
                 render();
             }
+        }
+
+        function getJourneyOKRsContribution(journeyId) {
+            // Buscar OKRs que estão relacionados a frentes que podem contribuir para esta jornada
+            // Por enquanto, vamos mostrar uma mensagem genérica
+            // Futuramente pode ser expandido com relacionamento direto jornada-OKR
+            return okrs.filter(okr => {
+                // Verificar se há alguma relação indireta através de frentes
+                // Por enquanto, retornar vazio e mostrar mensagem genérica
+                return false;
+            });
+        }
+
+        function renderJourneyEvolutionChart(journey) {
+            if (!journey.maturityHistory || journey.maturityHistory.length === 0) {
+                return '<p class="text-sm text-slate-500 italic">Nenhum histórico disponível ainda. Atualize os valores de maturidade para ver a evolução.</p>';
+            }
+            
+            const history = journey.maturityHistory.sort((a, b) => new Date(a.date) - new Date(b.date));
+            const maxValue = 100;
+            const chartHeight = 200;
+            
+            return `
+                <div class="relative" style="height: ${chartHeight}px;">
+                    <svg class="w-full h-full" viewBox="0 0 ${history.length * 60 + 40} ${chartHeight + 40}" preserveAspectRatio="xMidYMid meet">
+                        <!-- Eixos -->
+                        <line x1="30" y1="${chartHeight + 10}" x2="${history.length * 60 + 10}" y2="${chartHeight + 10}" stroke="#cbd5e1" stroke-width="2"/>
+                        <line x1="30" y1="10" x2="30" y2="${chartHeight + 10}" stroke="#cbd5e1" stroke-width="2"/>
+                        
+                        <!-- Linha de evolução -->
+                        <polyline 
+                            points="${history.map((snapshot, idx) => {
+                                const x = 40 + (idx * 60);
+                                const y = chartHeight - (snapshot.overall / maxValue) * chartHeight;
+                                return `${x},${y}`;
+                            }).join(' ')}"
+                            fill="none"
+                            stroke="#3b82f6"
+                            stroke-width="3"
+                            stroke-linecap="round"
+                        />
+                        
+                        <!-- Pontos -->
+                        ${history.map((snapshot, idx) => {
+                            const x = 40 + (idx * 60);
+                            const y = chartHeight - (snapshot.overall / maxValue) * chartHeight;
+                            return `
+                                <circle cx="${x}" cy="${y}" r="4" fill="#3b82f6"/>
+                                <text x="${x}" y="${chartHeight + 25}" text-anchor="middle" class="text-xs fill-slate-600" font-size="10">
+                                    ${new Date(snapshot.date).toLocaleDateString('pt-BR', { month: 'short', day: 'numeric' })}
+                                </text>
+                                <text x="${x}" y="${y - 5}" text-anchor="middle" class="text-xs fill-slate-900 font-semibold" font-size="10">
+                                    ${snapshot.overall}%
+                                </text>
+                            `;
+                        }).join('')}
+                        
+                        <!-- Grade -->
+                        ${[0, 25, 50, 75, 100].map(val => {
+                            const y = chartHeight - (val / maxValue) * chartHeight;
+                            return `
+                                <line x1="30" y1="${y}" x2="${history.length * 60 + 10}" y2="${y}" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4,4"/>
+                                <text x="25" y="${y + 4}" text-anchor="end" class="text-xs fill-slate-500" font-size="10">${val}%</text>
+                            `;
+                        }).join('')}
+                    </svg>
+                </div>
+            `;
         }
 
         function openNewJourneyModal() {
@@ -2763,6 +2864,45 @@
                                             <div class="text-sm font-semibold mb-2">Geral</div>
                                             <div class="text-3xl font-bold">${overallMaturity}%</div>
                                         </div>
+                                    </div>
+
+                                    <!-- Gráfico de Evolução Temporal -->
+                                    <div class="mb-6 border-t border-slate-200 pt-6">
+                                        <h4 class="font-semibold text-slate-800 mb-4">Evolução Temporal da Maturidade</h4>
+                                        ${renderJourneyEvolutionChart(journey)}
+                                    </div>
+
+                                    <!-- Contribuição para OKRs -->
+                                    <div class="mb-6 border-t border-slate-200 pt-6">
+                                        <h4 class="font-semibold text-slate-800 mb-4">Contribuição para OKRs</h4>
+                                        ${(() => {
+                                            // Buscar OKRs relacionados através de frentes que possam estar ligadas a esta jornada
+                                            // Por enquanto, mostrar uma mensagem informativa
+                                            const relatedOKRs = getJourneyOKRsContribution(journey.id);
+                                            
+                                            if (relatedOKRs.length > 0) {
+                                                return `
+                                                    <div class="space-y-2">
+                                                        ${relatedOKRs.map(okr => {
+                                                            const okrStatus = calculateOKRStatus(okr);
+                                                            return `
+                                                                <div class="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded">
+                                                                    <span class="text-sm font-medium text-blue-900">${okr.objetivo}</span>
+                                                                    <span class="text-xs px-2 py-1 rounded ${okrStatus.color} ${okrStatus.textColor}">${okrStatus.label}</span>
+                                                                </div>
+                                                            `;
+                                                        }).join('')}
+                                                    </div>
+                                                `;
+                                            } else {
+                                                return `
+                                                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
+                                                        <i class="fas fa-info-circle text-slate-400 text-2xl mb-2" aria-hidden="true"></i>
+                                                        <p class="text-sm text-slate-600">A contribuição para OKRs é calculada através do relacionamento com frentes de engenharia.</p>
+                                                    </div>
+                                                `;
+                                            }
+                                        })()}
                                     </div>
 
                                     <div class="flex gap-3">
