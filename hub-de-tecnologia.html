@@ -3264,6 +3264,107 @@
             return indicators[pilar][indicador][monthYearKey] || '';
         }
 
+        function getIndicatorHistory(pilar, indicador, months = 6) {
+            if (!indicators[pilar] || !indicators[pilar][indicador]) return [];
+            
+            const history = [];
+            for (let i = months - 1; i >= 0; i--) {
+                const targetDate = new Date(selectedIndicatorYear, selectedIndicatorMonth - 1 - i, 1);
+                const monthYearKey = `${targetDate.getFullYear()}-${String(targetDate.getMonth() + 1).padStart(2, '0')}`;
+                const value = indicators[pilar][indicador][monthYearKey] || 0;
+                history.push({
+                    month: targetDate.getMonth() + 1,
+                    year: targetDate.getFullYear(),
+                    value: parseFloat(value) || 0,
+                    label: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][targetDate.getMonth()]
+                });
+            }
+            return history;
+        }
+
+        function calculateIndicatorInsights() {
+            const insights = {
+                trends: [],
+                topPerformers: [],
+                alerts: []
+            };
+            
+            // Análise de tendências (últimos 3 meses)
+            Object.entries(indicators).forEach(([pilar, indicadores]) => {
+                if (typeof indicadores === 'object' && indicadores !== null) {
+                    Object.keys(indicadores).forEach(indicador => {
+                        const history = getIndicatorHistory(pilar, indicador, 3);
+                        if (history.length >= 2) {
+                            const latest = history[history.length - 1].value;
+                            const previous = history[history.length - 2].value;
+                            const change = previous !== 0 ? ((latest - previous) / previous) * 100 : 0;
+                            
+                            if (Math.abs(change) > 10) {
+                                insights.trends.push({
+                                    pilar,
+                                    indicador,
+                                    change,
+                                    direction: change > 0 ? 'up' : 'down',
+                                    current: latest,
+                                    previous: previous
+                                });
+                            }
+                        }
+                    });
+                }
+            });
+            
+            return insights;
+        }
+
+        function renderIndicatorChart(history, maxValue = null) {
+            if (history.length === 0) return '<p class="text-sm text-slate-400 italic">Sem dados suficientes para gráfico</p>';
+            
+            const max = maxValue || Math.max(...history.map(h => h.value), 1);
+            const chartHeight = 150;
+            const chartWidth = history.length * 50;
+            const padding = { top: 10, right: 20, bottom: 30, left: 40 };
+            
+            const points = history.map((h, i) => {
+                const x = padding.left + (i / (history.length - 1 || 1)) * (chartWidth - padding.left - padding.right);
+                const y = chartHeight - padding.bottom - (h.value / max) * (chartHeight - padding.top - padding.bottom);
+                return `${x},${y}`;
+            }).join(' ');
+            
+            const pathData = `M ${points}`;
+            
+            return `
+                <svg width="${chartWidth}" height="${chartHeight}" class="w-full" style="max-width: 100%; height: auto;">
+                    <defs>
+                        <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.3" />
+                            <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:0" />
+                        </linearGradient>
+                    </defs>
+                    <!-- Grid -->
+                    ${[0, 0.25, 0.5, 0.75, 1].map(p => {
+                        const y = chartHeight - padding.bottom - p * (chartHeight - padding.top - padding.bottom);
+                        return `<line x1="${padding.left}" y1="${y}" x2="${chartWidth - padding.right}" y2="${y}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="2,2" />`;
+                    }).join('')}
+                    <!-- Area under curve -->
+                    <path d="${pathData} L ${padding.left + (chartWidth - padding.left - padding.right)},${chartHeight - padding.bottom} L ${padding.left},${chartHeight - padding.bottom} Z" fill="url(#gradient)" />
+                    <!-- Line -->
+                    <path d="M ${pathData}" stroke="#3b82f6" stroke-width="2" fill="none" />
+                    <!-- Points -->
+                    ${history.map((h, i) => {
+                        const x = padding.left + (i / (history.length - 1 || 1)) * (chartWidth - padding.left - padding.right);
+                        const y = chartHeight - padding.bottom - (h.value / max) * (chartHeight - padding.top - padding.bottom);
+                        return `<circle cx="${x}" cy="${y}" r="3" fill="#3b82f6" />`;
+                    }).join('')}
+                    <!-- Labels -->
+                    ${history.map((h, i) => {
+                        const x = padding.left + (i / (history.length - 1 || 1)) * (chartWidth - padding.left - padding.right);
+                        return `<text x="${x}" y="${chartHeight - 5}" text-anchor="middle" font-size="10" fill="#6b7280">${h.label}</text>`;
+                    }).join('')}
+                </svg>
+            `;
+        }
+
         function renderIndicatorsPage() {
             const months = [
                 { value: 1, label: 'Janeiro' }, { value: 2, label: 'Fevereiro' }, { value: 3, label: 'Março' },
@@ -3326,6 +3427,106 @@
                         </div>
                     </div>
 
+                    <!-- Dashboard Executivo -->
+                    ${(() => {
+                        const insights = calculateIndicatorInsights();
+                        
+                        // Calcular totais por categoria
+                        const calculateTotals = () => {
+                            const monthYearKey = `${selectedIndicatorYear}-${String(selectedIndicatorMonth).padStart(2, '0')}`;
+                            let totalIncidents = 0, totalChanges = 0, totalAlerts = 0, totalAbends = 0;
+                            
+                            if (indicators['Gestão de Incidentes']) {
+                                totalIncidents = getIndicatorValue('Gestão de Incidentes', 'Volume de Abertura de Incidentes Funcionais') || 0;
+                            }
+                            if (indicators['Gestão de Mudanças']) {
+                                totalChanges = getIndicatorValue('Gestão de Mudanças', 'Volume de Mudanças Realizadas') || 0;
+                            }
+                            if (indicators['Gestão de Alertas']) {
+                                totalAlerts = getIndicatorValue('Gestão de Alertas', 'Volume de Alertas Recebidos') || 0;
+                            }
+                            if (indicators['Gestão de Abends']) {
+                                totalAbends = getIndicatorValue('Gestão de Abends', 'Volume de Abends Abertos') || 0;
+                            }
+                            
+                            return { totalIncidents, totalChanges, totalAlerts, totalAbends };
+                        };
+                        
+                        const totals = calculateTotals();
+                        
+                        return `
+                            <div class="mb-8 space-y-6">
+                                <!-- Cards de Resumo Executivo -->
+                                <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <i class="fas fa-exclamation-circle text-3xl opacity-80"></i>
+                                            <span class="text-xs bg-white/20 px-2 py-1 rounded-full">Este mês</span>
+                                        </div>
+                                        <h3 class="text-2xl font-bold mb-1">${totals.totalIncidents}</h3>
+                                        <p class="text-sm opacity-90">Incidentes Funcionais</p>
+                                    </div>
+                                    
+                                    <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <i class="fas fa-sync-alt text-3xl opacity-80"></i>
+                                            <span class="text-xs bg-white/20 px-2 py-1 rounded-full">Este mês</span>
+                                        </div>
+                                        <h3 class="text-2xl font-bold mb-1">${totals.totalChanges}</h3>
+                                        <p class="text-sm opacity-90">Mudanças Realizadas</p>
+                                    </div>
+                                    
+                                    <div class="bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-lg shadow-lg p-6 text-white">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <i class="fas fa-bell text-3xl opacity-80"></i>
+                                            <span class="text-xs bg-white/20 px-2 py-1 rounded-full">Este mês</span>
+                                        </div>
+                                        <h3 class="text-2xl font-bold mb-1">${totals.totalAlerts}</h3>
+                                        <p class="text-sm opacity-90">Alertas Recebidos</p>
+                                    </div>
+                                    
+                                    <div class="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <i class="fas fa-bug text-3xl opacity-80"></i>
+                                            <span class="text-xs bg-white/20 px-2 py-1 rounded-full">Este mês</span>
+                                        </div>
+                                        <h3 class="text-2xl font-bold mb-1">${totals.totalAbends}</h3>
+                                        <p class="text-sm opacity-90">Abends Abertos</p>
+                                    </div>
+                                </section>
+                                
+                                <!-- Insights de Tendências -->
+                                ${insights.trends.length > 0 ? `
+                                    <section class="bg-white rounded-lg shadow-md p-6 border-2 border-blue-200">
+                                        <div class="flex items-center gap-3 mb-4">
+                                            <i class="fas fa-chart-line text-blue-600 text-2xl"></i>
+                                            <h2 class="text-xl font-bold text-slate-900">Insights de Tendências</h2>
+                                        </div>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            ${insights.trends.slice(0, 4).map(trend => {
+                                                const color = trend.direction === 'up' ? 'text-green-600' : 'text-red-600';
+                                                const icon = trend.direction === 'up' ? 'fa-arrow-up' : 'fa-arrow-down';
+                                                return `
+                                                    <div class="border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                                                        <div class="flex items-center justify-between mb-2">
+                                                            <span class="text-sm font-semibold text-slate-700">${trend.pilar}</span>
+                                                            <i class="fas ${icon} ${color}"></i>
+                                                        </div>
+                                                        <h4 class="text-sm text-slate-600 mb-2">${trend.indicador}</h4>
+                                                        <div class="flex items-baseline gap-2">
+                                                            <span class="text-2xl font-bold ${color}">${Math.abs(trend.change).toFixed(1)}%</span>
+                                                            <span class="text-xs text-slate-500">${trend.direction === 'up' ? 'aumento' : 'redução'}</span>
+                                                        </div>
+                                                    </div>
+                                                `;
+                                            }).join('')}
+                                        </div>
+                                    </section>
+                                ` : ''}
+                            </div>
+                        `;
+                    })()}
+
                     <div class="space-y-8">
                         ${Object.entries(indicators).map(([pilar, indicadores]) => {
                             if (typeof indicadores !== 'object' || indicadores === null || Array.isArray(indicadores)) {
@@ -3356,11 +3557,13 @@
                                                 <tr class="border-b border-slate-200">
                                                     <th class="text-left py-3 px-4 font-semibold text-slate-700">Indicador</th>
                                                     <th class="text-right py-3 px-4 font-semibold text-slate-700">Valor (${months.find(m => m.value === selectedIndicatorMonth)?.label || selectedIndicatorMonth}/${selectedIndicatorYear})</th>
+                                                    <th class="text-center py-3 px-4 font-semibold text-slate-700">Evolução (6 meses)</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 ${indicadorKeys.map(indicador => {
                                                     const currentValue = getIndicatorValue(pilar, indicador);
+                                                    const history = getIndicatorHistory(pilar, indicador, 6);
                                                     return `
                                                         <tr class="border-b border-slate-100 hover:bg-slate-50">
                                                             <td class="py-3 px-4 text-slate-800">${indicador}</td>
@@ -3371,6 +3574,11 @@
                                                                        onchange="updateIndicatorValue('${pilar}', '${indicador}', this.value)"
                                                                        placeholder="0.00"
                                                                        class="w-full max-w-xs ml-auto text-right border border-slate-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                            </td>
+                                                            <td class="py-3 px-4">
+                                                                <div style="width: 100%; max-width: 300px; margin: 0 auto;">
+                                                                    ${renderIndicatorChart(history)}
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     `;
