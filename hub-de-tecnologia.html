@@ -593,6 +593,9 @@
         let selectedEventJourneyId = null;
         let selectedEventCategory = null;
         let showIncidentForm = false;
+        let showRiskForm = false;
+        let showRiskOverview = false;
+        let riskOverviewJourneyId = null;
         let showIncidentOverview = false;
         let incidentOverviewJourneyId = null;
         
@@ -648,6 +651,12 @@
             return journey.events.filter(e => e.category === 'Incidentes').length;
         }
 
+        function countRisks(journeyId) {
+            const journey = journeys.find(j => j.id === journeyId);
+            if (!journey || !journey.events) return 0;
+            return journey.events.filter(e => e.category === 'Riscos').length;
+        }
+
         function openIncidentOverview(journeyId) {
             incidentOverviewJourneyId = journeyId;
             showIncidentOverview = true;
@@ -657,6 +666,18 @@
         function closeIncidentOverview() {
             showIncidentOverview = false;
             incidentOverviewJourneyId = null;
+            render();
+        }
+
+        function openRiskOverview(journeyId) {
+            riskOverviewJourneyId = journeyId;
+            showRiskOverview = true;
+            render();
+        }
+
+        function closeRiskOverview() {
+            showRiskOverview = false;
+            riskOverviewJourneyId = null;
             render();
         }
 
@@ -673,6 +694,7 @@
             selectedEventJourneyId = null;
             selectedEventCategory = null;
             showIncidentForm = false;
+            showRiskForm = false;
             render();
         }
 
@@ -680,6 +702,13 @@
             selectedEventCategory = category;
             if (category === 'Incidentes') {
                 showIncidentForm = true;
+                showRiskForm = false;
+            } else if (category === 'Riscos') {
+                showRiskForm = true;
+                showIncidentForm = false;
+            } else {
+                showIncidentForm = false;
+                showRiskForm = false;
             }
             render();
         }
@@ -723,6 +752,62 @@
             };
 
             journey.events.push(newIncident);
+            saveJourneys();
+            closeEventModal();
+        }
+
+        function saveRisk() {
+            const plannerId = document.getElementById('risk-planner-id').value.trim();
+            const taskName = document.getElementById('risk-task-name').value.trim();
+            const bucket = document.getElementById('risk-bucket').value;
+            const progress = parseInt(document.getElementById('risk-progress').value) || 0;
+            const priority = document.getElementById('risk-priority').value;
+            const assignedTo = document.getElementById('risk-assigned-to').value.trim();
+            const createdBy = document.getElementById('risk-created-by').value.trim();
+            const createdAt = document.getElementById('risk-created-at').value;
+            const startDate = document.getElementById('risk-start-date').value;
+            const dueDate = document.getElementById('risk-due-date').value;
+            const isRecurring = document.getElementById('risk-recurring').checked;
+            const isOverdue = document.getElementById('risk-overdue').checked;
+            const isCompleted = document.getElementById('risk-completed').checked;
+            const completedAt = document.getElementById('risk-completed-at').value;
+            const completedBy = document.getElementById('risk-completed-by').value.trim();
+            const checklist = document.getElementById('risk-checklist').value.trim();
+            const labels = document.getElementById('risk-labels').value.trim();
+            const description = document.getElementById('risk-description').value.trim();
+
+            if (!plannerId || !taskName || !bucket) {
+                alert('Preencha todos os campos obrigatórios!');
+                return;
+            }
+
+            const journey = journeys.find(j => j.id === selectedEventJourneyId);
+            if (!journey) return;
+
+            const newRisk = {
+                id: 'risk' + Date.now(),
+                category: 'Riscos',
+                plannerId: plannerId,
+                taskName: taskName,
+                bucket: bucket,
+                progress: progress,
+                priority: priority,
+                assignedTo: assignedTo,
+                createdBy: createdBy,
+                createdAt: createdAt,
+                startDate: startDate,
+                dueDate: dueDate,
+                isRecurring: isRecurring,
+                isOverdue: isOverdue,
+                isCompleted: isCompleted,
+                completedAt: completedAt,
+                completedBy: completedBy,
+                checklist: checklist,
+                labels: labels,
+                description: description
+            };
+
+            journey.events.push(newRisk);
             saveJourneys();
             closeEventModal();
         }
@@ -1038,6 +1123,7 @@
             if (showEventModal) { showEventModal = false; changed = true; }
             if (selectedPillar || editingJourneyId) { selectedPillar = null; selectedAttribute = null; editingJourneyId = null; changed = true; }
             if (showIncidentOverview) { showIncidentOverview = false; incidentOverviewJourneyId = null; changed = true; }
+            if (showRiskOverview) { showRiskOverview = false; riskOverviewJourneyId = null; changed = true; }
             if (creatingNewJourney) { creatingNewJourney = false; changed = true; }
             if (creatingNewOKR) { creatingNewOKR = false; changed = true; }
             if (editingOKRId) { editingOKRId = null; changed = true; }
@@ -3158,6 +3244,14 @@
                                                     <i class="fas fa-exclamation-circle mr-1"></i> ${incidentCount} Incidente${incidentCount !== 1 ? 's' : ''}
                                                 </button>
                                             ` : ''}
+                                            ${(() => {
+                                                const riskCount = countRisks(journey.id);
+                                                return riskCount > 0 ? `
+                                                    <button onclick="openRiskOverview('${journey.id}')" class="incident-counter px-3 py-2 rounded-lg text-xs font-semibold bg-yellow-100 text-yellow-800 hover:bg-yellow-200 transition-colors">
+                                                        <i class="fas fa-exclamation-triangle mr-1"></i> ${riskCount} Risco${riskCount !== 1 ? 's' : ''}
+                                                    </button>
+                                                ` : '';
+                                            })()}
                                             <button onclick="deleteJourney('${journey.id}')" class="px-3 py-2 bg-red-200 hover:bg-red-300 text-red-700 text-xs font-semibold rounded transition-colors">
                                                 <i class="fas fa-trash"></i>
                                             </button>
@@ -3296,6 +3390,7 @@
                 ${showEventModal ? renderEventModal() : ''}
                 ${selectedPillar ? renderDetailModalJourney() : ''}
                 ${showIncidentOverview ? renderIncidentOverviewModal() : ''}
+                ${showRiskOverview ? renderRiskOverviewModal() : ''}
             `;
         }
 
@@ -3432,6 +3527,135 @@
             `;
         }
 
+        function renderRiskOverviewModal() {
+            if (!riskOverviewJourneyId) return '';
+            const journey = journeys.find(j => j.id === riskOverviewJourneyId);
+            if (!journey) return '';
+            
+            const risks = journey.events.filter(e => e.category === 'Riscos');
+            
+            // Contar estatísticas
+            const completedCount = risks.filter(r => r.isCompleted).length;
+            const overdueCount = risks.filter(r => r.isOverdue).length;
+            const urgentCount = risks.filter(r => r.priority === 'Urgente').length;
+            const avgProgress = risks.length > 0 ? Math.round(risks.reduce((sum, r) => sum + (r.progress || 0), 0) / risks.length) : 0;
+
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeRiskOverview()">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                        <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
+                            <div>
+                                <h2 class="text-2xl font-bold text-slate-900">Overview de Riscos</h2>
+                                <p class="text-sm text-slate-600 mt-1">${journey.name} (${journey.acronym})</p>
+                            </div>
+                            <button onclick="closeRiskOverview()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+
+                        <div class="p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
+                            <div class="grid grid-cols-4 gap-4">
+                                <div class="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                                    <p class="text-xs text-yellow-600 mb-2 font-semibold">TOTAL DE RISCOS</p>
+                                    <div class="text-4xl font-bold text-yellow-700">${risks.length}</div>
+                                </div>
+                                <div class="bg-green-50 rounded-lg p-4 border border-green-200">
+                                    <p class="text-xs text-green-600 mb-2 font-semibold">CONCLUÍDOS</p>
+                                    <div class="text-4xl font-bold text-green-700">${completedCount}</div>
+                                </div>
+                                <div class="bg-red-50 rounded-lg p-4 border border-red-200">
+                                    <p class="text-xs text-red-600 mb-2 font-semibold">ATRASADOS</p>
+                                    <div class="text-4xl font-bold text-red-700">${overdueCount}</div>
+                                </div>
+                                <div class="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                                    <p class="text-xs text-orange-600 mb-2 font-semibold">URGENTES</p>
+                                    <div class="text-4xl font-bold text-orange-700">${urgentCount}</div>
+                                </div>
+                            </div>
+
+                            <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                                <p class="text-xs text-blue-600 mb-2 font-semibold">PROGRESSO MÉDIO</p>
+                                <div class="flex items-center gap-3">
+                                    <div class="flex-1 h-6 bg-blue-200 rounded-full overflow-hidden">
+                                        <div class="h-full bg-blue-600 rounded-full transition-all" style="width: ${avgProgress}%"></div>
+                                    </div>
+                                    <span class="text-lg font-bold text-blue-700">${avgProgress}%</span>
+                                </div>
+                            </div>
+
+                            <div class="border-t border-slate-200 pt-6">
+                                <h3 class="font-semibold text-slate-900 mb-4">Lista de Riscos</h3>
+                                <div class="space-y-3">
+                                    ${risks.length > 0 ? risks.map(risk => {
+                                        const priorityColors = {
+                                            'Urgente': 'bg-red-100 text-red-800',
+                                            'Alta': 'bg-orange-100 text-orange-800',
+                                            'Média': 'bg-yellow-100 text-yellow-800',
+                                            'Baixa': 'bg-blue-100 text-blue-800'
+                                        };
+                                        const priorityColor = priorityColors[risk.priority] || 'bg-gray-100 text-gray-800';
+                                        
+                                        return `
+                                            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                                                <div class="flex items-start justify-between mb-3">
+                                                    <div class="flex-1">
+                                                        <div class="flex items-center gap-2 mb-1">
+                                                            <h4 class="font-semibold text-slate-900">${risk.taskName}</h4>
+                                                            ${risk.priority ? `<span class="px-2 py-1 rounded text-xs font-semibold ${priorityColor}">${risk.priority}</span>` : ''}
+                                                            ${risk.isCompleted ? '<span class="px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800">Concluído</span>' : ''}
+                                                            ${risk.isOverdue ? '<span class="px-2 py-1 rounded text-xs font-semibold bg-red-100 text-red-800">Atrasado</span>' : ''}
+                                                        </div>
+                                                        <p class="text-xs text-slate-500 mt-1"><strong>ID:</strong> ${risk.plannerId}</p>
+                                                        ${risk.description ? `<p class="text-sm text-slate-600 mt-2">${risk.description}</p>` : ''}
+                                                    </div>
+                                                    <button onclick="deleteEvent('${journey.id}', '${risk.id}')" class="p-2 hover:bg-red-100 rounded transition-colors text-red-600">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                                <div class="grid grid-cols-2 gap-4 text-sm">
+                                                    ${risk.progress !== undefined ? `
+                                                        <div>
+                                                            <span class="text-slate-600">Progresso:</span>
+                                                            <div class="flex items-center gap-2 mt-1">
+                                                                <div class="flex-1 h-3 bg-slate-200 rounded-full overflow-hidden">
+                                                                    <div class="h-full bg-blue-600 rounded-full transition-all" style="width: ${risk.progress}%"></div>
+                                                                </div>
+                                                                <span class="text-xs font-bold text-slate-700">${risk.progress}%</span>
+                                                            </div>
+                                                        </div>
+                                                    ` : ''}
+                                                    ${risk.assignedTo ? `<div><span class="text-slate-600">Atribuído a:</span> <span class="font-semibold text-slate-800">${risk.assignedTo}</span></div>` : ''}
+                                                    ${risk.dueDate ? `<div><span class="text-slate-600">Prazo:</span> <span class="font-semibold text-slate-800">${new Date(risk.dueDate).toLocaleDateString('pt-BR')}</span></div>` : ''}
+                                                    ${risk.createdBy ? `<div><span class="text-slate-600">Criado por:</span> <span class="font-semibold text-slate-800">${risk.createdBy}</span></div>` : ''}
+                                                </div>
+                                                ${risk.checklist ? `
+                                                    <div class="mt-3 pt-3 border-t border-slate-200">
+                                                        <p class="text-xs text-slate-600 mb-2 font-semibold">Checklist:</p>
+                                                        <div class="text-sm text-slate-700 whitespace-pre-line">${risk.checklist}</div>
+                                                    </div>
+                                                ` : ''}
+                                                ${risk.labels ? `
+                                                    <div class="flex flex-wrap gap-2 mt-3">
+                                                        ${risk.labels.split(',').map(label => `<span class="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs">${label.trim()}</span>`).join('')}
+                                                    </div>
+                                                ` : ''}
+                                            </div>
+                                        `;
+                                    }).join('') : '<p class="text-center text-slate-500 italic">Nenhum risco cadastrado para esta jornada.</p>'}
+                                </div>
+                            </div>
+
+                            <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                <button onclick="closeRiskOverview()" class="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-check mr-2"></i> Fechar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         function renderEventModal() {
             const journey = journeys.find(j => j.id === selectedEventJourneyId);
             if (!journey) return '';
@@ -3545,6 +3769,127 @@
                                             <i class="fas fa-save mr-2"></i> Salvar Incidente
                                         </button>
                                         <button onclick="selectEventCategory(null); showIncidentForm = false; render()" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
+                                            <i class="fas fa-arrow-left mr-2"></i> Voltar
+                                        </button>
+                                        <button onclick="closeEventModal()" class="flex-1 px-4 py-2 bg-red-300 hover:bg-red-400 text-red-700 font-semibold rounded transition-colors">
+                                            <i class="fas fa-times mr-2"></i> Cancelar
+                                        </button>
+                                    </div>
+                                </div>
+                            ` : ''}
+
+                            ${selectedEventCategory === 'Riscos' && showRiskForm ? `
+                                <div class="space-y-4">
+                                    <h3 class="font-semibold text-slate-900">Formulário de Risco</h3>
+                                    
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-semibold text-slate-700 mb-2">ID do Planner *</label>
+                                            <input type="text" id="risk-planner-id" placeholder="Ex: ABC123xyz" class="w-full" required>
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-semibold text-slate-700 mb-2">Nome da Tarefa *</label>
+                                            <input type="text" id="risk-task-name" placeholder="Ex: Melhorar monitoramento" class="w-full" required>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Bucket (Jornada Relacionada) *</label>
+                                        <select id="risk-bucket" class="w-full" required>
+                                            <option value="">Selecione uma jornada...</option>
+                                            ${journeys.map(j => `<option value="${j.id}">${j.name} (${j.acronym})</option>`).join('')}
+                                        </select>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-semibold text-slate-700 mb-2">Progresso (%)</label>
+                                            <input type="number" id="risk-progress" min="0" max="100" placeholder="0" class="w-full">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-semibold text-slate-700 mb-2">Prioridade</label>
+                                            <select id="risk-priority" class="w-full">
+                                                <option value="">Selecione...</option>
+                                                <option value="Urgente">Urgente</option>
+                                                <option value="Alta">Alta</option>
+                                                <option value="Média">Média</option>
+                                                <option value="Baixa">Baixa</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-semibold text-slate-700 mb-2">Atribuído a</label>
+                                            <input type="text" id="risk-assigned-to" placeholder="Ex: João Silva" class="w-full">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-semibold text-slate-700 mb-2">Criado por</label>
+                                            <input type="text" id="risk-created-by" placeholder="Ex: Maria Santos" class="w-full">
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-3 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-semibold text-slate-700 mb-2">Criado em</label>
+                                            <input type="date" id="risk-created-at" class="w-full">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-semibold text-slate-700 mb-2">Data de Início</label>
+                                            <input type="date" id="risk-start-date" class="w-full">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-semibold text-slate-700 mb-2">Data de Conclusão</label>
+                                            <input type="date" id="risk-due-date" class="w-full">
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-3 gap-4">
+                                        <div class="flex items-center gap-2">
+                                            <input type="checkbox" id="risk-recurring" class="w-4 h-4">
+                                            <label for="risk-recurring" class="text-sm font-semibold text-slate-700 cursor-pointer">É Recorrente</label>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <input type="checkbox" id="risk-overdue" class="w-4 h-4">
+                                            <label for="risk-overdue" class="text-sm font-semibold text-slate-700 cursor-pointer">Atrasado</label>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <input type="checkbox" id="risk-completed" class="w-4 h-4">
+                                            <label for="risk-completed" class="text-sm font-semibold text-slate-700 cursor-pointer">Concluído</label>
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-semibold text-slate-700 mb-2">Concluído em</label>
+                                            <input type="date" id="risk-completed-at" class="w-full">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-semibold text-slate-700 mb-2">Concluído por</label>
+                                            <input type="text" id="risk-completed-by" placeholder="Ex: Pedro Oliveira" class="w-full">
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Itens da Lista de Verificação</label>
+                                        <textarea id="risk-checklist" placeholder="Digite os itens separados por linha..." rows="3" class="w-full"></textarea>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Rótulos</label>
+                                        <input type="text" id="risk-labels" placeholder="Ex: Segurança, Urgente, Ação" class="w-full">
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Descrição</label>
+                                        <textarea id="risk-description" placeholder="Descreva o risco em detalhes..." rows="4" class="w-full"></textarea>
+                                    </div>
+
+                                    <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                        <button onclick="saveRisk()" class="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                            <i class="fas fa-save mr-2"></i> Salvar Risco
+                                        </button>
+                                        <button onclick="selectEventCategory(null); showRiskForm = false; render()" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
                                             <i class="fas fa-arrow-left mr-2"></i> Voltar
                                         </button>
                                         <button onclick="closeEventModal()" class="flex-1 px-4 py-2 bg-red-300 hover:bg-red-400 text-red-700 font-semibold rounded transition-colors">
