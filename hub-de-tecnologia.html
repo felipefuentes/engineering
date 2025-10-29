@@ -628,6 +628,7 @@
         // Estados para Projetos
         let creatingNewProject = false;
         let editingProjectId = null;
+        let showingTasksModal = null; // ID do projeto cujo modal de tarefas está aberto
         
         // Estados para Indicadores
         let selectedIndicatorMonth = new Date().getMonth() + 1;
@@ -3895,6 +3896,7 @@
             return `
                 ${creatingNewProject ? renderNewProjectModal() : ''}
                 ${editingProjectId ? renderEditProjectModal() : ''}
+                ${showingTasksModal ? renderTasksModal() : ''}
                 <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
                     <div class="max-w-7xl mx-auto px-6 py-4">
                         <div class="flex items-center justify-between">
@@ -3981,7 +3983,7 @@
                                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                                             <div class="bg-slate-50 rounded-lg p-3">
                                                 <div class="text-xs text-slate-600 mb-1">Velocidade</div>
-                                                <div class="text-lg font-bold text-slate-900">${velocity.toFixed(1)} tasks/sem</div>
+                                                <div class="text-lg font-bold text-slate-900">${tasksTotal > 0 ? velocity.toFixed(1) : '0'} tasks/sem</div>
                                             </div>
                                             <div class="bg-slate-50 rounded-lg p-3">
                                                 <div class="text-xs text-slate-600 mb-1">Restantes</div>
@@ -3989,12 +3991,40 @@
                                             </div>
                                             <div class="bg-slate-50 rounded-lg p-3">
                                                 <div class="text-xs text-slate-600 mb-1">Previsão</div>
-                                                <div class="text-lg font-bold text-slate-900">${Math.ceil(estimatedWeeksRemaining)} sem</div>
+                                                <div class="text-lg font-bold text-slate-900">${tasksTotal > 0 && velocity > 0 ? Math.ceil(estimatedWeeksRemaining) : '-'} sem</div>
                                             </div>
                                             <div class="bg-slate-50 rounded-lg p-3">
                                                 <div class="text-xs text-slate-600 mb-1">Serviços</div>
                                                 <div class="text-lg font-bold text-slate-900">${project.affectedServices || 0}</div>
                                             </div>
+                                        </div>
+                                        
+                                        <!-- Lista de Tarefas -->
+                                        <div class="mt-4 border-t border-slate-200 pt-4">
+                                            <div class="flex items-center justify-between mb-3">
+                                                <h4 class="font-semibold text-slate-800">Roadmap / Tarefas</h4>
+                                                <button onclick="openTasksModal('${project.id}')" class="px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-xs font-semibold rounded transition-colors" aria-label="Gerenciar Tarefas">
+                                                    <i class="fas fa-tasks mr-1" aria-hidden="true"></i> Gerenciar Tarefas
+                                                </button>
+                                            </div>
+                                            ${project.tasks && project.tasks.length > 0 ? `
+                                                <div class="space-y-2 max-h-48 overflow-y-auto">
+                                                    ${project.tasks.slice(0, 5).map(task => {
+                                                        const taskStatusClass = task.status === 'completed' ? 'text-green-600' : 
+                                                                              task.status === 'in-progress' ? 'text-blue-600' : 
+                                                                              task.status === 'blocked' ? 'text-red-600' : 'text-slate-600';
+                                                        return `
+                                                            <div class="flex items-center gap-2 p-2 bg-slate-50 rounded ${task.status === 'completed' ? 'line-through text-slate-500' : ''}">
+                                                                <i class="fas fa-${task.status === 'completed' ? 'check-circle' : 'circle'} ${taskStatusClass}" aria-hidden="true"></i>
+                                                                <span class="text-sm">${task.title}</span>
+                                                            </div>
+                                                        `;
+                                                    }).join('')}
+                                                    ${project.tasks.length > 5 ? `<p class="text-xs text-slate-500 mt-2">+ ${project.tasks.length - 5} tarefas adicionais...</p>` : ''}
+                                                </div>
+                                            ` : `
+                                                <p class="text-sm text-slate-400 italic">Nenhuma tarefa cadastrada. Clique em "Gerenciar Tarefas" para adicionar.</p>
+                                            `}
                                         </div>
                                     </div>
                                 `;
@@ -4235,6 +4265,125 @@
             saveProjects();
             closeEditProjectModal();
             render();
+        }
+
+        function openTasksModal(projectId) {
+            showingTasksModal = projectId;
+            render();
+        }
+
+        function closeTasksModal() {
+            showingTasksModal = null;
+            render();
+        }
+
+        function renderTasksModal() {
+            const project = projects.find(p => p.id === showingTasksModal);
+            if (!project) return '';
+            
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeTasksModal()" role="dialog" aria-modal="true">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                        <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
+                            <div>
+                                <h2 class="text-2xl font-bold text-slate-900">Gerenciar Tarefas</h2>
+                                <p class="text-sm text-slate-600 mt-1">Projeto: ${project.title}</p>
+                            </div>
+                            <button onclick="closeTasksModal()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors" aria-label="Fechar modal">
+                                <i class="fas fa-times text-slate-600 text-xl" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        <div class="p-6">
+                            <div class="mb-6 flex justify-between items-center">
+                                <h3 class="text-lg font-semibold text-slate-800">Tarefas do Projeto</h3>
+                                <button onclick="addTaskToProject('${project.id}')" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-plus mr-2" aria-hidden="true"></i> Nova Tarefa
+                                </button>
+                            </div>
+                            
+                            ${!project.tasks || project.tasks.length === 0 ? `
+                                <div class="bg-slate-50 border border-slate-200 rounded-lg p-8 text-center">
+                                    <i class="fas fa-tasks text-4xl text-slate-300 mb-3" aria-hidden="true"></i>
+                                    <p class="text-slate-600">Nenhuma tarefa cadastrada ainda.</p>
+                                    <button onclick="addTaskToProject('${project.id}')" class="mt-4 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                        <i class="fas fa-plus mr-2" aria-hidden="true"></i> Criar Primeira Tarefa
+                                    </button>
+                                </div>
+                            ` : `
+                                <div class="space-y-2 max-h-96 overflow-y-auto">
+                                    ${project.tasks.map((task, index) => {
+                                        const taskStatusClass = task.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                                                              task.status === 'in-progress' ? 'bg-blue-100 text-blue-800' : 
+                                                              task.status === 'blocked' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-800';
+                                        return `
+                                            <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                                                <input type="checkbox" 
+                                                       ${task.status === 'completed' ? 'checked' : ''} 
+                                                       onchange="toggleTaskStatus('${project.id}', ${index}, this.checked)"
+                                                       class="w-5 h-5 rounded">
+                                                <div class="flex-1">
+                                                    <div class="flex items-center gap-2 mb-1">
+                                                        <span class="font-medium text-slate-900 ${task.status === 'completed' ? 'line-through text-slate-500' : ''}">${task.title}</span>
+                                                        <span class="px-2 py-0.5 rounded text-xs font-semibold ${taskStatusClass}">${task.status === 'completed' ? 'Concluído' : task.status === 'in-progress' ? 'Em Andamento' : task.status === 'blocked' ? 'Bloqueado' : 'Pendente'}</span>
+                                                    </div>
+                                                    ${task.description ? `<p class="text-sm text-slate-600">${task.description}</p>` : ''}
+                                                </div>
+                                                <button onclick="deleteTask('${project.id}', ${index})" class="px-2 py-1 text-red-500 hover:bg-red-50 rounded transition-colors" aria-label="Deletar tarefa">
+                                                    <i class="fas fa-trash" aria-hidden="true"></i>
+                                                </button>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function addTaskToProject(projectId) {
+            const project = projects.find(p => p.id === projectId);
+            if (!project) return;
+            
+            const title = prompt('Digite o título da tarefa:');
+            if (!title || !title.trim()) return;
+            
+            const description = prompt('Digite a descrição da tarefa (opcional):') || '';
+            
+            if (!project.tasks) project.tasks = [];
+            
+            project.tasks.push({
+                title: title.trim(),
+                description: description.trim(),
+                status: 'pending',
+                createdAt: new Date().toISOString()
+            });
+            
+            saveProjects();
+            render();
+        }
+
+        function toggleTaskStatus(projectId, taskIndex, isCompleted) {
+            const project = projects.find(p => p.id === projectId);
+            if (!project || !project.tasks[taskIndex]) return;
+            
+            project.tasks[taskIndex].status = isCompleted ? 'completed' : 'pending';
+            project.updatedAt = new Date().toISOString();
+            
+            saveProjects();
+            render();
+        }
+
+        function deleteTask(projectId, taskIndex) {
+            const project = projects.find(p => p.id === projectId);
+            if (!project || !project.tasks[taskIndex]) return;
+            
+            if (confirm('Tem certeza que deseja deletar esta tarefa?')) {
+                project.tasks.splice(taskIndex, 1);
+                saveProjects();
+                render();
+            }
         }
 
         function renderJourneysPage() {
