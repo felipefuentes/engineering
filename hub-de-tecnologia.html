@@ -1040,6 +1040,7 @@
             if (showIncidentOverview) { showIncidentOverview = false; incidentOverviewJourneyId = null; changed = true; }
             if (creatingNewJourney) { creatingNewJourney = false; changed = true; }
             if (creatingNewOKR) { creatingNewOKR = false; changed = true; }
+            if (editingOKRId) { editingOKRId = null; changed = true; }
             if (showingFrontsRelationModal) { showingFrontsRelationModal = null; draggedFrontId = null; changed = true; }
             if (changed) render();
         }
@@ -2221,6 +2222,8 @@
             
             okrs.push(newOKR);
             saveOKRs();
+            // Sincronizar KRs como indicadores
+            syncKRsToIndicators();
             closeNewOKRModal();
         }
 
@@ -2305,10 +2308,172 @@
             }
         }
 
+        function openEditOKR(okrId) {
+            editingOKRId = okrId;
+            render();
+        }
+
+        function closeEditOKR() {
+            editingOKRId = null;
+            render();
+        }
+
+        function saveEditOKR() {
+            const okr = okrs.find(o => o.id === editingOKRId);
+            if (!okr) return;
+
+            const objetivo = document.getElementById('edit-okr-objetivo').value.trim();
+            const krsContainer = document.getElementById('edit-okr-krs-container');
+            
+            if (!objetivo) {
+                alert('O objetivo é obrigatório!');
+                return;
+            }
+            
+            const krItems = krsContainer.querySelectorAll('.kr-item');
+            if (krItems.length === 0) {
+                alert('Adicione pelo menos um Resultado-Chave (KR)!');
+                return;
+            }
+            
+            try {
+                const krs = Array.from(krItems).map((item, index) => {
+                    const krId = item.dataset.krId || ('kr' + Date.now() + index);
+                    const description = item.querySelector('[name="kr-description"]').value.trim();
+                    const unit = item.querySelector('[name="kr-unit"]').value;
+                    const baseline = parseFloat(item.querySelector('[name="kr-baseline"]').value) || 0;
+                    const target = parseFloat(item.querySelector('[name="kr-target"]').value) || 0;
+                    const indicatorPath = item.querySelector('[name="kr-indicator"]').value;
+                    
+                    if (!description || !unit) {
+                        throw new Error(`KR ${index + 1}: Descrição e Unidade são obrigatórios!`);
+                    }
+                    
+                    // Manter dados existentes se for KR editado
+                    const existingKr = okr.krs.find(k => k.id === krId);
+                    
+                    return {
+                        id: krId,
+                        description,
+                        unit,
+                        baseline,
+                        target,
+                        realizado: existingKr ? (existingKr.realizado || 0) : 0,
+                        varMoM: existingKr ? (existingKr.varMoM || 0) : 0,
+                        indicatorPath: indicatorPath || null,
+                        relatedFronts: existingKr ? (existingKr.relatedFronts || []) : [],
+                        createdAt: existingKr ? existingKr.createdAt : new Date().toISOString()
+                    };
+                });
+                
+                okr.objetivo = objetivo;
+                okr.krs = krs;
+                okr.updatedAt = new Date().toISOString();
+                
+                // Sincronizar KRs como indicadores
+                syncKRsToIndicators();
+                
+                saveOKRs();
+                closeEditOKR();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+
+        function addKRToEditOKR() {
+            const krsContainer = document.getElementById('edit-okr-krs-container');
+            if (!krsContainer) return;
+            
+            const krIndex = krsContainer.querySelectorAll('.kr-item').length;
+            const krHTML = `
+                <div class="kr-item border border-slate-200 rounded-lg p-4 mb-3 bg-slate-50">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="font-semibold text-slate-700">Resultado-Chave ${krIndex + 1}</h4>
+                        <button type="button" onclick="this.closest('.kr-item').remove()" class="text-red-500 hover:text-red-700" aria-label="Remover KR">
+                            <i class="fas fa-times" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2">Descrição do KR *</label>
+                            <input type="text" name="kr-description" placeholder="Ex: Reduzir MTTR em 30%" class="w-full" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2">Unidade de Medida *</label>
+                            <select name="kr-unit" class="w-full" required>
+                                <option value="">Selecione...</option>
+                                ${measurementUnits.map(unit => `<option value="${unit}">${unit}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2">Baseline *</label>
+                            <input type="number" name="kr-baseline" placeholder="0" step="0.01" class="w-full" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2">Target *</label>
+                            <input type="number" name="kr-target" placeholder="0" step="0.01" class="w-full" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2">Indicador Relacionado</label>
+                            <select name="kr-indicator" class="w-full">
+                                <option value="">Nenhum</option>
+                                ${Object.entries(indicators).map(([pilar, indicadores]) => 
+                                    typeof indicadores === 'object' && indicadores !== null
+                                        ? Object.keys(indicadores).map(ind => 
+                                            `<option value="${pilar}|${ind}">${pilar} - ${ind}</option>`
+                                          ).join('')
+                                        : ''
+                                ).join('')}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            `;
+            krsContainer.insertAdjacentHTML('beforeend', krHTML);
+        }
+
+        function syncKRsToIndicators() {
+            // Sincronizar todos os KRs como indicadores na seção de OKRs
+            if (!indicators['KRs de OKRs']) {
+                indicators['KRs de OKRs'] = {};
+            }
+            
+            okrs.forEach(okr => {
+                okr.krs.forEach(kr => {
+                    // Usar ID único do KR como chave do indicador
+                    const indicatorKey = `${okr.objetivo} - ${kr.description}`;
+                    
+                    // Se não existe, criar estrutura vazia
+                    if (!indicators['KRs de OKRs'][indicatorKey]) {
+                        indicators['KRs de OKRs'][indicatorKey] = {};
+                    }
+                    
+                    // Se o KR tem indicatorPath, também criar referência no pilar correto
+                    if (kr.indicatorPath) {
+                        const [pilar, indicador] = kr.indicatorPath.split('|');
+                        if (pilar && indicador) {
+                            if (!indicators[pilar]) {
+                                indicators[pilar] = {};
+                            }
+                            if (!indicators[pilar][indicador]) {
+                                indicators[pilar][indicador] = {};
+                            }
+                        }
+                    }
+                });
+            });
+            
+            saveIndicators();
+        }
+
         function deleteOKR(okrId) {
             if (confirm('Tem certeza que deseja deletar este OKR?')) {
                 okrs = okrs.filter(o => o.id !== okrId);
                 saveOKRs();
+                // Resincronizar indicadores após deletar
+                syncKRsToIndicators();
                 render();
             }
         }
@@ -2412,6 +2577,9 @@
                                                 </div>
                                             </div>
                                             <div class="flex items-center gap-2">
+                                                <button onclick="openEditOKR('${okr.id}')" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded transition-colors" aria-label="Editar OKR">
+                                                    <i class="fas fa-edit" aria-hidden="true"></i>
+                                                </button>
                                                 <button onclick="deleteOKR('${okr.id}')" class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded transition-colors" aria-label="Deletar OKR">
                                                     <i class="fas fa-trash" aria-hidden="true"></i>
                                                 </button>
@@ -2508,6 +2676,99 @@
                         </div>
                     </div>
                 ` : ''}
+
+                <!-- Modal de Edição de OKR -->
+                ${editingOKRId ? (() => {
+                    const okr = okrs.find(o => o.id === editingOKRId);
+                    if (!okr) return '';
+                    return `
+                        <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeEditOKR()" role="dialog" aria-modal="true" aria-labelledby="edit-okr-modal-title">
+                            <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                                <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
+                                    <h2 id="edit-okr-modal-title" class="text-2xl font-bold text-slate-900">Editar OKR</h2>
+                                    <button onclick="closeEditOKR()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors" aria-label="Fechar modal">
+                                        <i class="fas fa-times text-slate-600 text-xl" aria-hidden="true"></i>
+                                    </button>
+                                </div>
+                                <div class="p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
+                                    <div>
+                                        <label for="edit-okr-objetivo" class="block text-sm font-semibold text-slate-700 mb-2">Objetivo *</label>
+                                        <input type="text" id="edit-okr-objetivo" value="${okr.objetivo}" placeholder="Ex: Reduzir tempo de resposta a incidentes em 50%" class="w-full">
+                                    </div>
+                                    
+                                    <div>
+                                        <div class="flex items-center justify-between mb-3">
+                                            <label class="block text-sm font-semibold text-slate-700">Resultados-Chave (KRs)</label>
+                                            <button type="button" onclick="addKRToEditOKR()" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded transition-colors">
+                                                <i class="fas fa-plus mr-1" aria-hidden="true"></i> Adicionar KR
+                                            </button>
+                                        </div>
+                                        <div id="edit-okr-krs-container" class="space-y-3">
+                                            ${okr.krs.map((kr, idx) => {
+                                                return `
+                                                    <div class="kr-item border border-slate-200 rounded-lg p-4 mb-3 bg-slate-50" data-kr-id="${kr.id}">
+                                                        <div class="flex items-center justify-between mb-3">
+                                                            <h4 class="font-semibold text-slate-700">Resultado-Chave ${idx + 1}</h4>
+                                                            <button type="button" onclick="this.closest('.kr-item').remove()" class="text-red-500 hover:text-red-700" aria-label="Remover KR">
+                                                                <i class="fas fa-times" aria-hidden="true"></i>
+                                                            </button>
+                                                        </div>
+                                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                                                            <div>
+                                                                <label class="block text-sm font-semibold text-slate-700 mb-2">Descrição do KR *</label>
+                                                                <input type="text" name="kr-description" value="${kr.description}" placeholder="Ex: Reduzir MTTR em 30%" class="w-full" required>
+                                                            </div>
+                                                            <div>
+                                                                <label class="block text-sm font-semibold text-slate-700 mb-2">Unidade de Medida *</label>
+                                                                <select name="kr-unit" class="w-full" required>
+                                                                    <option value="">Selecione...</option>
+                                                                    ${measurementUnits.map(unit => `<option value="${unit}" ${unit === kr.unit ? 'selected' : ''}>${unit}</option>`).join('')}
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                            <div>
+                                                                <label class="block text-sm font-semibold text-slate-700 mb-2">Baseline *</label>
+                                                                <input type="number" name="kr-baseline" value="${kr.baseline}" placeholder="0" step="0.01" class="w-full" required>
+                                                            </div>
+                                                            <div>
+                                                                <label class="block text-sm font-semibold text-slate-700 mb-2">Target *</label>
+                                                                <input type="number" name="kr-target" value="${kr.target}" placeholder="0" step="0.01" class="w-full" required>
+                                                            </div>
+                                                            <div>
+                                                                <label class="block text-sm font-semibold text-slate-700 mb-2">Indicador Relacionado</label>
+                                                                <select name="kr-indicator" class="w-full">
+                                                                    <option value="">Nenhum</option>
+                                                                    ${Object.entries(indicators).map(([pilar, indicadores]) => 
+                                                                        typeof indicadores === 'object' && indicadores !== null
+                                                                            ? Object.keys(indicadores).map(ind => {
+                                                                                const path = `${pilar}|${ind}`;
+                                                                                return `<option value="${path}" ${kr.indicatorPath === path ? 'selected' : ''}>${pilar} - ${ind}</option>`;
+                                                                            }).join('')
+                                                                            : ''
+                                                                    ).join('')}
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                `;
+                                            }).join('')}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                        <button onclick="saveEditOKR()" class="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                            <i class="fas fa-save mr-2" aria-hidden="true"></i> Salvar Alterações
+                                        </button>
+                                        <button onclick="closeEditOKR()" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
+                                            <i class="fas fa-times mr-2" aria-hidden="true"></i> Cancelar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                })() : ''}
 
                 <!-- Modal de Relacionamento com Frentes (por KR) -->
                 ${showingFrontsRelationModal ? (() => {
@@ -2612,12 +2873,41 @@
         }
 
         function updateOKRsFromIndicators(pilar, indicador, value) {
-            const indicatorPath = `${pilar}|${indicador}`;
+            const monthYearKey = `${selectedIndicatorYear}-${String(selectedIndicatorMonth).padStart(2, '0')}`;
             
+            // Se for um indicador da seção "KRs de OKRs", atualizar o KR correspondente
+            if (pilar === 'KRs de OKRs') {
+                okrs.forEach(okr => {
+                    okr.krs.forEach(kr => {
+                        const krIndicatorKey = `${okr.objetivo} - ${kr.description}`;
+                        if (indicador === krIndicatorKey) {
+                            kr.realizado = value;
+                            
+                            // Calcular Var. MoM
+                            const prevMonth = selectedIndicatorMonth === 1 ? 12 : selectedIndicatorMonth - 1;
+                            const prevYear = selectedIndicatorMonth === 1 ? selectedIndicatorYear - 1 : selectedIndicatorYear;
+                            const prevMonthKey = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+                            
+                            const prevValue = indicators[pilar] && indicators[pilar][indicador] && indicators[pilar][indicador][prevMonthKey]
+                                ? indicators[pilar][indicador][prevMonthKey] : kr.baseline;
+                            
+                            if (prevValue !== 0) {
+                                kr.varMoM = ((value - prevValue) / prevValue) * 100;
+                            } else {
+                                kr.varMoM = 0;
+                            }
+                        }
+                    });
+                });
+                saveOKRs();
+                return;
+            }
+            
+            // Para indicadores tradicionais (relacionados via indicatorPath)
+            const indicatorPath = `${pilar}|${indicador}`;
             okrs.forEach(okr => {
                 okr.krs.forEach(kr => {
                     if (kr.indicatorPath === indicatorPath) {
-                        const monthYearKey = `${selectedIndicatorYear}-${String(selectedIndicatorMonth).padStart(2, '0')}`;
                         kr.realizado = value;
                         
                         // Calcular Var. MoM (comparar com mês anterior)
