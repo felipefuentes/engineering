@@ -582,6 +582,14 @@
         let okrs = JSON.parse(localStorage.getItem('okrs')) || JSON.parse(JSON.stringify(defaultOKRs));
         let indicators = JSON.parse(localStorage.getItem('indicators')) || JSON.parse(JSON.stringify(defaultIndicators));
         
+        // Dados para Projetos e Quicks Wins
+        const defaultProjects = [];
+        let projects = JSON.parse(localStorage.getItem('projects')) || JSON.parse(JSON.stringify(defaultProjects));
+        
+        function saveProjects() {
+            localStorage.setItem('projects', JSON.stringify(projects));
+        }
+        
         let currentPage = 'dashboard'; // Dashboard como página padrão
         let selectedFrontId = null;
         let expandedLevels = {};
@@ -616,6 +624,10 @@
         let editingOKRId = null;
         let showingFrontsRelationModal = null; // Formato: 'okrId|krId' ou null
         let draggedFrontId = null; // Para drag and drop
+        
+        // Estados para Projetos
+        let creatingNewProject = false;
+        let editingProjectId = null;
         
         // Estados para Indicadores
         let selectedIndicatorMonth = new Date().getMonth() + 1;
@@ -1545,6 +1557,9 @@
                                 </button>
                                 <button onclick="navigateTo('indicators')" class="px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para Evolução de Indicadores">
                                     <i class="fas fa-chart-line mr-1" aria-hidden="true"></i> Indicadores
+                                </button>
+                                <button onclick="navigateTo('projects')" class="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para Projetos">
+                                    <i class="fas fa-project-diagram mr-1" aria-hidden="true"></i> Projetos
                                 </button>
                                 <button onclick="navigateTo('fronts')" class="px-3 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para Frentes de Engenharia">
                                     <i class="fas fa-layer-group mr-1" aria-hidden="true"></i> Frentes
@@ -3874,6 +3889,138 @@
             `;
         }
 
+        // ========== PÁGINA DE PROJETOS E QUICKS WINS ==========
+        
+        function renderProjectsPage() {
+            return `
+                <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
+                    <div class="max-w-7xl mx-auto px-6 py-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h1 class="text-3xl font-bold text-slate-900">Projetos e Quicks Wins</h1>
+                                <p class="text-slate-600 mt-1 text-sm">Gestão de entregas e melhoria contínua</p>
+                            </div>
+                            <nav class="flex items-center gap-2" aria-label="Navegação principal">
+                                <button onclick="navigateTo('dashboard')" class="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para Dashboard">
+                                    <i class="fas fa-home mr-1" aria-hidden="true"></i> Dashboard
+                                </button>
+                                <button onclick="openNewProjectModal()" class="px-3 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Novo Projeto">
+                                    <i class="fas fa-plus mr-1" aria-hidden="true"></i> Novo Projeto
+                                </button>
+                            </nav>
+                        </div>
+                    </div>
+                </header>
+
+                <main class="max-w-7xl mx-auto px-6 py-8">
+                    ${projects.length === 0 ? `
+                        <div class="bg-white rounded-lg shadow-md p-12 text-center border-2 border-blue-200">
+                            <i class="fas fa-project-diagram text-6xl text-blue-400 mb-4" aria-hidden="true"></i>
+                            <h2 class="text-2xl font-bold text-slate-900 mb-2">Gerencie seus Projetos e Quicks Wins</h2>
+                            <p class="text-slate-600 mb-6">Comece criando seu primeiro projeto ou quick win para rastrear entregas e métricas.</p>
+                            <button onclick="openNewProjectModal()" class="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition-colors">
+                                <i class="fas fa-plus mr-2" aria-hidden="true"></i> Criar Primeiro Projeto
+                            </button>
+                        </div>
+                    ` : `
+                        <div class="grid grid-cols-1 gap-6">
+                            ${projects.map(project => {
+                                const tasksCompleted = project.tasks.filter(t => t.status === 'completed').length;
+                                const tasksTotal = project.tasks.length;
+                                const progress = tasksTotal > 0 ? (tasksCompleted / tasksTotal) * 100 : 0;
+                                
+                                const today = new Date();
+                                const endDate = new Date(project.endDate);
+                                const isOverdue = endDate < today && progress < 100;
+                                
+                                // Calcular velocidade (tasks por semana)
+                                const weeksElapsed = Math.max(1, Math.ceil((today - new Date(project.startDate)) / (1000 * 60 * 60 * 24 * 7)));
+                                const velocity = tasksCompleted / weeksElapsed;
+                                const remainingTasks = tasksTotal - tasksCompleted;
+                                const estimatedWeeksRemaining = remainingTasks / velocity;
+                                
+                                const statusColor = isOverdue ? 'bg-red-100 text-red-800' : 
+                                                   progress >= 90 ? 'bg-green-100 text-green-800' :
+                                                   progress >= 50 ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800';
+                                
+                                return `
+                                    <div class="bg-white rounded-lg shadow-md border-2 border-slate-200 p-6">
+                                        <div class="flex items-start justify-between mb-4">
+                                            <div class="flex-1">
+                                                <h3 class="text-xl font-bold text-slate-900 mb-2">${project.title}</h3>
+                                                <div class="flex items-center gap-3 text-sm text-slate-600">
+                                                    <span><i class="fas fa-calendar-alt mr-1"></i> Início: ${new Date(project.startDate).toLocaleDateString('pt-BR')}</span>
+                                                    <span><i class="fas fa-flag-checkered mr-1"></i> Fim: ${new Date(project.endDate).toLocaleDateString('pt-BR')}</span>
+                                                    <span class="px-2 py-1 rounded ${statusColor} font-semibold">${isOverdue ? 'Atrasado' : progress >= 90 ? 'Quase Concluído' : progress >= 50 ? 'Em Andamento' : 'Iniciando'}</span>
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <button onclick="openEditProject('${project.id}')" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded transition-colors" aria-label="Editar Projeto">
+                                                    <i class="fas fa-edit" aria-hidden="true"></i>
+                                                </button>
+                                                <button onclick="deleteProject('${project.id}')" class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded transition-colors" aria-label="Deletar Projeto">
+                                                    <i class="fas fa-trash" aria-hidden="true"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        <p class="text-slate-700 mb-4">${project.description}</p>
+                                        
+                                        <div class="mb-4">
+                                            <div class="flex items-center justify-between mb-2">
+                                                <span class="text-sm font-semibold text-slate-700">Progresso</span>
+                                                <span class="text-sm font-bold text-slate-900">${Math.round(progress)}% (${tasksCompleted}/${tasksTotal} tarefas)</span>
+                                            </div>
+                                            <div class="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
+                                                <div class="h-full bg-blue-500 rounded-full transition-all" style="width: ${Math.min(progress, 100)}%"></div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                                            <div class="bg-slate-50 rounded-lg p-3">
+                                                <div class="text-xs text-slate-600 mb-1">Velocidade</div>
+                                                <div class="text-lg font-bold text-slate-900">${velocity.toFixed(1)} tasks/sem</div>
+                                            </div>
+                                            <div class="bg-slate-50 rounded-lg p-3">
+                                                <div class="text-xs text-slate-600 mb-1">Restantes</div>
+                                                <div class="text-lg font-bold text-slate-900">${remainingTasks}</div>
+                                            </div>
+                                            <div class="bg-slate-50 rounded-lg p-3">
+                                                <div class="text-xs text-slate-600 mb-1">Previsão</div>
+                                                <div class="text-lg font-bold text-slate-900">${Math.ceil(estimatedWeeksRemaining)} sem</div>
+                                            </div>
+                                            <div class="bg-slate-50 rounded-lg p-3">
+                                                <div class="text-xs text-slate-600 mb-1">Serviços</div>
+                                                <div class="text-lg font-bold text-slate-900">${project.affectedServices || 0}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `}
+                </main>
+            `;
+        }
+
+        function openNewProjectModal() {
+            creatingNewProject = true;
+            render();
+        }
+
+        function closeNewProjectModal() {
+            creatingNewProject = false;
+            render();
+        }
+
+        function deleteProject(projectId) {
+            if (confirm('Tem certeza que deseja deletar este projeto?')) {
+                projects = projects.filter(p => p.id !== projectId);
+                saveProjects();
+                render();
+            }
+        }
+
         function renderJourneysPage() {
             return `
                 <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
@@ -4701,6 +4848,9 @@
                     break;
                 case 'indicators':
                     app.innerHTML = renderIndicatorsPage();
+                    break;
+                case 'projects':
+                    app.innerHTML = renderProjectsPage();
                     break;
                 case 'journeys':
                     app.innerHTML = renderJourneysPage();
