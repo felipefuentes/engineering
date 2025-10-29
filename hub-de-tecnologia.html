@@ -534,7 +534,44 @@
 
         let fronts = JSON.parse(localStorage.getItem('fronts')) || JSON.parse(JSON.stringify(defaultFronts));
         let journeys = JSON.parse(localStorage.getItem('journeys')) || JSON.parse(JSON.stringify(defaultJourneys));
-        let currentPage = 'fronts';
+        
+        // Estruturas de dados para OKRs e Indicadores
+        const defaultOKRs = [];
+        const defaultIndicators = {
+            // Estrutura por pilares para Evolução de Indicadores (Run the Bank)
+            'Gestão de Incidentes': {
+                'Volume de Abertura de Incidentes Funcionais': {},
+                'Volume de Resolução de Incidentes Funcionais': {},
+                'MTTR (Mean Time To Repair)': {},
+                'MTBF (Mean Time Between Failures)': {}
+            },
+            'Gestão de Problemas': {
+                'Volume de Abertura': {},
+                'Volume de Resolução': {}
+            },
+            'Gestão de Requisições': {
+                'Volume de Abertura': {},
+                'Volume de Resolução': {},
+                'Média de Aging': {}
+            },
+            'Gestão de Abends': {},
+            'Gestão de Mudanças': {},
+            'Gestão de Alertas': {},
+            'Qualidade': {
+                '% Reuso': {},
+                'Densidade de Testes': {},
+                'Automação': {}
+            },
+            'Segurança': {
+                'Vulnerabilidades Corrigidas': {},
+                'Obsolescências Corrigidas': {}
+            }
+        };
+        
+        let okrs = JSON.parse(localStorage.getItem('okrs')) || JSON.parse(JSON.stringify(defaultOKRs));
+        let indicators = JSON.parse(localStorage.getItem('indicators')) || JSON.parse(JSON.stringify(defaultIndicators));
+        
+        let currentPage = 'dashboard'; // Dashboard como página padrão
         let selectedFrontId = null;
         let expandedLevels = {};
         let editingFrontId = null;
@@ -558,6 +595,16 @@
         let showIncidentForm = false;
         let showIncidentOverview = false;
         let incidentOverviewJourneyId = null;
+        
+        // Estados para OKRs
+        let creatingNewOKR = false;
+        let editingOKRId = null;
+        let showingFrontsRelationModal = null; // ID do OKR sendo relacionado
+        let draggedFrontId = null; // Para drag and drop
+        
+        // Estados para Indicadores
+        let selectedIndicatorMonth = new Date().getMonth() + 1;
+        let selectedIndicatorYear = new Date().getFullYear();
 
         function saveUIState() {
             const uiState = {
@@ -585,6 +632,14 @@
 
         function saveJourneys() {
             localStorage.setItem('journeys', JSON.stringify(journeys));
+        }
+
+        function saveOKRs() {
+            localStorage.setItem('okrs', JSON.stringify(okrs));
+        }
+
+        function saveIndicators() {
+            localStorage.setItem('indicators', JSON.stringify(indicators));
         }
 
         function countIncidents(journeyId) {
@@ -883,6 +938,8 @@
             if (selectedPillar || editingJourneyId) { selectedPillar = null; selectedAttribute = null; editingJourneyId = null; changed = true; }
             if (showIncidentOverview) { showIncidentOverview = false; incidentOverviewJourneyId = null; changed = true; }
             if (creatingNewJourney) { creatingNewJourney = false; changed = true; }
+            if (creatingNewOKR) { creatingNewOKR = false; changed = true; }
+            if (showingFrontsRelationModal) { showingFrontsRelationModal = null; draggedFrontId = null; changed = true; }
             if (changed) render();
         }
 
@@ -1071,6 +1128,294 @@
                 saveFronts();
                 render();
             }
+        }
+
+        // Funções auxiliares para cálculos de Dashboard
+        function calculateOKRProgress() {
+            if (!okrs || okrs.length === 0) return { average: 0, total: 0, onTrack: 0, atRisk: 0, behind: 0 };
+            
+            let totalProgress = 0;
+            let onTrack = 0, atRisk = 0, behind = 0;
+            
+            okrs.forEach(okr => {
+                if (okr.krs && okr.krs.length > 0) {
+                    const okrProgress = okr.krs.reduce((sum, kr) => {
+                        const progress = kr.realizado !== undefined && kr.target !== undefined && kr.target !== 0
+                            ? (kr.realizado / kr.target) * 100 : 0;
+                        return sum + Math.min(progress, 100);
+                    }, 0) / okr.krs.length;
+                    
+                    totalProgress += okrProgress;
+                    
+                    if (okrProgress >= 80) onTrack++;
+                    else if (okrProgress >= 50) atRisk++;
+                    else behind++;
+                }
+            });
+            
+            return {
+                average: okrs.length > 0 ? totalProgress / okrs.length : 0,
+                total: okrs.length,
+                onTrack,
+                atRisk,
+                behind
+            };
+        }
+
+        function getFrontsMaturitySummary() {
+            if (!fronts || fronts.length === 0) return { average: 0, distribution: {} };
+            
+            const maturitySum = fronts.reduce((sum, f) => sum + (f.maturityLevel || 0), 0);
+            const distribution = {};
+            
+            fronts.forEach(f => {
+                const level = f.maturityLevel || 0;
+                distribution[level] = (distribution[level] || 0) + 1;
+            });
+            
+            return {
+                average: fronts.length > 0 ? maturitySum / fronts.length : 0,
+                distribution,
+                total: fronts.length
+            };
+        }
+
+        function getJourneysMaturitySummary() {
+            if (!journeys || journeys.length === 0) return { average: 0, byPillar: {} };
+            
+            const pillarTotals = { availability: 0, quality: 0, security: 0, performance: 0 };
+            let validJourneys = 0;
+            
+            journeys.forEach(j => {
+                let hasData = false;
+                Object.keys(pillarTotals).forEach(pillar => {
+                    const maturity = calculatePillarMaturity(j, pillar);
+                    if (maturity > 0) {
+                        pillarTotals[pillar] += maturity;
+                        hasData = true;
+                    }
+                });
+                if (hasData) validJourneys++;
+            });
+            
+            const byPillar = {};
+            Object.keys(pillarTotals).forEach(pillar => {
+                byPillar[pillar] = validJourneys > 0 ? pillarTotals[pillar] / validJourneys : 0;
+            });
+            
+            const overallAvg = Object.values(byPillar).reduce((a, b) => a + b, 0) / Object.keys(byPillar).length;
+            
+            return {
+                average: overallAvg,
+                byPillar,
+                total: journeys.length
+            };
+        }
+
+        function renderDashboardPage() {
+            const okrStats = calculateOKRProgress();
+            const frontsStats = getFrontsMaturitySummary();
+            const journeysStats = getJourneysMaturitySummary();
+            
+            return `
+                <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
+                    <div class="max-w-7xl mx-auto px-6 py-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h1 class="text-3xl font-bold text-slate-900">Hub de Tecnologia</h1>
+                                <p class="text-slate-600 mt-1 text-sm">Dashboard Executivo - Visão Consolidada</p>
+                            </div>
+                            <nav class="flex items-center gap-2" aria-label="Navegação principal">
+                                <button onclick="navigateTo('okrs')" class="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para OKRs">
+                                    <i class="fas fa-bullseye mr-1" aria-hidden="true"></i> OKRs
+                                </button>
+                                <button onclick="navigateTo('indicators')" class="px-3 py-2 bg-purple-500 hover:bg-purple-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para Evolução de Indicadores">
+                                    <i class="fas fa-chart-line mr-1" aria-hidden="true"></i> Indicadores
+                                </button>
+                                <button onclick="navigateTo('fronts')" class="px-3 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para Frentes de Engenharia">
+                                    <i class="fas fa-layer-group mr-1" aria-hidden="true"></i> Frentes
+                                </button>
+                                <button onclick="navigateTo('journeys')" class="px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para Maturidade de Jornadas">
+                                    <i class="fas fa-route mr-1" aria-hidden="true"></i> Jornadas
+                                </button>
+                            </nav>
+                        </div>
+                    </div>
+                </header>
+
+                <main class="max-w-7xl mx-auto px-6 py-8">
+                    <!-- Cards de Progresso dos OKRs -->
+                    <section class="mb-8" aria-labelledby="okrs-section">
+                        <h2 id="okrs-section" class="text-2xl font-bold text-slate-900 mb-4">Progresso dos OKRs</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                            <div class="bg-white rounded-lg shadow-md p-6 border-2 border-blue-200">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h3 class="text-sm font-semibold text-slate-600">Progresso Médio</h3>
+                                    <i class="fas fa-chart-pie text-blue-500 text-xl" aria-hidden="true"></i>
+                                </div>
+                                <div class="text-3xl font-bold text-blue-600">${Math.round(okrStats.average)}%</div>
+                                <p class="text-xs text-slate-500 mt-1">${okrStats.total} OKR${okrStats.total !== 1 ? 's' : ''} cadastrado${okrStats.total !== 1 ? 's' : ''}</p>
+                            </div>
+                            <div class="bg-white rounded-lg shadow-md p-6 border-2 border-green-200">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h3 class="text-sm font-semibold text-slate-600">No Prazo</h3>
+                                    <i class="fas fa-check-circle text-green-500 text-xl" aria-hidden="true"></i>
+                                </div>
+                                <div class="text-3xl font-bold text-green-600">${okrStats.onTrack}</div>
+                                <p class="text-xs text-slate-500 mt-1">≥ 80% de progresso</p>
+                            </div>
+                            <div class="bg-white rounded-lg shadow-md p-6 border-2 border-yellow-200">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h3 class="text-sm font-semibold text-slate-600">Em Risco</h3>
+                                    <i class="fas fa-exclamation-triangle text-yellow-500 text-xl" aria-hidden="true"></i>
+                                </div>
+                                <div class="text-3xl font-bold text-yellow-600">${okrStats.atRisk}</div>
+                                <p class="text-xs text-slate-500 mt-1">50% - 79% de progresso</p>
+                            </div>
+                            <div class="bg-white rounded-lg shadow-md p-6 border-2 border-red-200">
+                                <div class="flex items-center justify-between mb-2">
+                                    <h3 class="text-sm font-semibold text-slate-600">Atrasados</h3>
+                                    <i class="fas fa-times-circle text-red-500 text-xl" aria-hidden="true"></i>
+                                </div>
+                                <div class="text-3xl font-bold text-red-600">${okrStats.behind}</div>
+                                <p class="text-xs text-slate-500 mt-1">&lt; 50% de progresso</p>
+                            </div>
+                        </div>
+                        <button onclick="navigateTo('okrs')" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors">
+                            <i class="fas fa-arrow-right mr-2" aria-hidden="true"></i> Ver Todos os OKRs
+                        </button>
+                    </section>
+
+                    <!-- Cards de Evolução das Frentes -->
+                    <section class="mb-8" aria-labelledby="fronts-section">
+                        <h2 id="fronts-section" class="text-2xl font-bold text-slate-900 mb-4">Evolução das Frentes de Engenharia</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                            <div class="bg-white rounded-lg shadow-md p-6 border-2 border-slate-200">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-semibold text-slate-800">Maturidade Média</h3>
+                                    <div class="flex items-center gap-1">
+                                        ${[...Array(5)].map((_, i) => `
+                                            <i class="fas fa-star ${i < Math.round(frontsStats.average) ? 'star-filled' : 'star-empty'} text-sm" aria-hidden="true"></i>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                <div class="text-4xl font-bold text-slate-900">${frontsStats.average.toFixed(1)}</div>
+                                <p class="text-sm text-slate-600 mt-2">de 5.0 (${frontsStats.total} frentes)</p>
+                            </div>
+                            <div class="bg-white rounded-lg shadow-md p-6 border-2 border-slate-200">
+                                <h3 class="text-lg font-semibold text-slate-800 mb-4">Distribuição por Nível</h3>
+                                <div class="space-y-2">
+                                    ${[1, 2, 3, 4, 5].map(level => {
+                                        const count = frontsStats.distribution[level] || 0;
+                                        const percentage = frontsStats.total > 0 ? (count / frontsStats.total) * 100 : 0;
+                                        return `
+                                            <div class="flex items-center justify-between text-sm">
+                                                <span class="text-slate-600">Nível ${level}</span>
+                                                <div class="flex items-center gap-2">
+                                                    <div class="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                                        <div class="h-full bg-blue-500 rounded-full" style="width: ${percentage}%"></div>
+                                                    </div>
+                                                    <span class="font-semibold text-slate-700 w-8 text-right">${count}</span>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                            <div class="bg-white rounded-lg shadow-md p-6 border-2 border-slate-200">
+                                <h3 class="text-lg font-semibold text-slate-800 mb-2">Resumo</h3>
+                                <div class="space-y-3 mt-4">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-sm text-slate-600">Total de Frentes</span>
+                                        <span class="text-xl font-bold text-slate-900">${frontsStats.total}</span>
+                                    </div>
+                                    <button onclick="navigateTo('fronts')" class="w-full px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors text-sm">
+                                        <i class="fas fa-arrow-right mr-2" aria-hidden="true"></i> Ver Detalhes
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Mini Gráfico de Maturidade de Jornadas -->
+                    <section class="mb-8" aria-labelledby="journeys-section">
+                        <h2 id="journeys-section" class="text-2xl font-bold text-slate-900 mb-4">Maturidade das Jornadas</h2>
+                        <div class="bg-white rounded-lg shadow-md p-6 border-2 border-slate-200">
+                            <div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
+                                ${Object.entries(journeysStats.byPillar).map(([pillar, value]) => {
+                                    const pillarNames = { availability: 'Disponibilidade', quality: 'Qualidade', security: 'Segurança', performance: 'Performance' };
+                                    const colorClasses = {
+                                        availability: 'from-blue-400 to-blue-600',
+                                        quality: 'from-green-400 to-green-600',
+                                        security: 'from-red-400 to-red-600',
+                                        performance: 'from-purple-400 to-purple-600'
+                                    };
+                                    return `
+                                        <div class="text-center">
+                                            <div class="mb-2">
+                                                <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br ${colorClasses[pillar]} text-white text-2xl font-bold">
+                                                    ${Math.round(value)}%
+                                                </div>
+                                            </div>
+                                            <h4 class="text-sm font-semibold text-slate-700">${pillarNames[pillar]}</h4>
+                                        </div>
+                                    `;
+                                }).join('')}
+                                <div class="text-center">
+                                    <div class="mb-2">
+                                        <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 text-white text-2xl font-bold border-4 border-current">
+                                            ${Math.round(journeysStats.average)}%
+                                        </div>
+                                    </div>
+                                    <h4 class="text-sm font-semibold text-slate-700">Geral</h4>
+                                </div>
+                            </div>
+                            <button onclick="navigateTo('journeys')" class="w-full px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded transition-colors">
+                                <i class="fas fa-arrow-right mr-2" aria-hidden="true"></i> Ver Detalhes das Jornadas
+                            </button>
+                        </div>
+                    </section>
+
+                    <!-- Acesso Rápido -->
+                    <section aria-labelledby="quick-access-section">
+                        <h2 id="quick-access-section" class="text-2xl font-bold text-slate-900 mb-4">Acesso Rápido</h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <button onclick="navigateTo('okrs'); if(okrs.length === 0) { creatingNewOKR = true; render(); }" class="bg-white rounded-lg shadow-md p-6 border-2 border-blue-200 hover:border-blue-400 transition-colors text-left group">
+                                <div class="flex items-center justify-between mb-3">
+                                    <i class="fas fa-bullseye text-blue-500 text-2xl" aria-hidden="true"></i>
+                                    <i class="fas fa-arrow-right text-blue-500 group-hover:translate-x-1 transition-transform" aria-hidden="true"></i>
+                                </div>
+                                <h3 class="font-bold text-slate-900 mb-1">OKRs da Organização</h3>
+                                <p class="text-sm text-slate-600">Defina e acompanhe objetivos e resultados-chave</p>
+                            </button>
+                            <button onclick="navigateTo('indicators')" class="bg-white rounded-lg shadow-md p-6 border-2 border-purple-200 hover:border-purple-400 transition-colors text-left group">
+                                <div class="flex items-center justify-between mb-3">
+                                    <i class="fas fa-chart-line text-purple-500 text-2xl" aria-hidden="true"></i>
+                                    <i class="fas fa-arrow-right text-purple-500 group-hover:translate-x-1 transition-transform" aria-hidden="true"></i>
+                                </div>
+                                <h3 class="font-bold text-slate-900 mb-1">Evolução de Indicadores</h3>
+                                <p class="text-sm text-slate-600">Alimente e acompanhe métricas Run the Bank</p>
+                            </button>
+                            <button onclick="navigateTo('fronts')" class="bg-white rounded-lg shadow-md p-6 border-2 border-green-200 hover:border-green-400 transition-colors text-left group">
+                                <div class="flex items-center justify-between mb-3">
+                                    <i class="fas fa-layer-group text-green-500 text-2xl" aria-hidden="true"></i>
+                                    <i class="fas fa-arrow-right text-green-500 group-hover:translate-x-1 transition-transform" aria-hidden="true"></i>
+                                </div>
+                                <h3 class="font-bold text-slate-900 mb-1">Frentes de Engenharia</h3>
+                                <p class="text-sm text-slate-600">Gerencie frentes e seus níveis de maturidade</p>
+                            </button>
+                            <button onclick="navigateTo('journeys')" class="bg-white rounded-lg shadow-md p-6 border-2 border-orange-200 hover:border-orange-400 transition-colors text-left group">
+                                <div class="flex items-center justify-between mb-3">
+                                    <i class="fas fa-route text-orange-500 text-2xl" aria-hidden="true"></i>
+                                    <i class="fas fa-arrow-right text-orange-500 group-hover:translate-x-1 transition-transform" aria-hidden="true"></i>
+                                </div>
+                                <h3 class="font-bold text-slate-900 mb-1">Maturidade das Jornadas</h3>
+                                <p class="text-sm text-slate-600">Avalie maturidade por pilares e jornadas</p>
+                            </button>
+                        </div>
+                    </section>
+                </main>
+            `;
         }
 
         function renderFrontsPage() {
@@ -1577,6 +1922,686 @@
             `;
         }
 
+        // ========== PÁGINA DE OKRs ==========
+        const measurementUnits = ['%', 'R$', 'unidades', 'Dias'];
+        
+        function openNewOKRModal() {
+            creatingNewOKR = true;
+            render();
+        }
+
+        function closeNewOKRModal() {
+            creatingNewOKR = false;
+            render();
+        }
+
+        function addKRToOKR() {
+            const krsContainer = document.getElementById('okr-krs-container');
+            if (!krsContainer) return;
+            
+            const krIndex = krsContainer.querySelectorAll('.kr-item').length;
+            const krHTML = `
+                <div class="kr-item border border-slate-200 rounded-lg p-4 mb-3 bg-slate-50">
+                    <div class="flex items-center justify-between mb-3">
+                        <h4 class="font-semibold text-slate-700">Resultado-Chave ${krIndex + 1}</h4>
+                        <button type="button" onclick="this.closest('.kr-item').remove()" class="text-red-500 hover:text-red-700" aria-label="Remover KR">
+                            <i class="fas fa-times" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2">Descrição do KR *</label>
+                            <input type="text" name="kr-description" placeholder="Ex: Reduzir MTTR em 30%" class="w-full" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2">Unidade de Medida *</label>
+                            <select name="kr-unit" class="w-full" required>
+                                <option value="">Selecione...</option>
+                                ${measurementUnits.map(unit => `<option value="${unit}">${unit}</option>`).join('')}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2">Baseline *</label>
+                            <input type="number" name="kr-baseline" placeholder="0" step="0.01" class="w-full" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2">Target *</label>
+                            <input type="number" name="kr-target" placeholder="0" step="0.01" class="w-full" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2">Indicador Relacionado</label>
+                            <select name="kr-indicator" class="w-full">
+                                <option value="">Nenhum</option>
+                                ${Object.entries(indicators).map(([pilar, indicadores]) => 
+                                    typeof indicadores === 'object' && indicadores !== null
+                                        ? Object.keys(indicadores).map(ind => 
+                                            `<option value="${pilar}|${ind}">${pilar} - ${ind}</option>`
+                                          ).join('')
+                                        : ''
+                                ).join('')}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            `;
+            krsContainer.insertAdjacentHTML('beforeend', krHTML);
+        }
+
+        function saveNewOKR() {
+            const objetivo = document.getElementById('okr-objetivo').value.trim();
+            const krsContainer = document.getElementById('okr-krs-container');
+            
+            if (!objetivo) {
+                alert('O objetivo é obrigatório!');
+                return;
+            }
+            
+            const krItems = krsContainer.querySelectorAll('.kr-item');
+            if (krItems.length === 0) {
+                alert('Adicione pelo menos um Resultado-Chave (KR)!');
+                return;
+            }
+            
+            const krs = Array.from(krItems).map((item, index) => {
+                const description = item.querySelector('[name="kr-description"]').value.trim();
+                const unit = item.querySelector('[name="kr-unit"]').value;
+                const baseline = parseFloat(item.querySelector('[name="kr-baseline"]').value) || 0;
+                const target = parseFloat(item.querySelector('[name="kr-target"]').value) || 0;
+                const indicatorPath = item.querySelector('[name="kr-indicator"]').value;
+                
+                if (!description || !unit) {
+                    throw new Error(`KR ${index + 1}: Descrição e Unidade são obrigatórios!`);
+                }
+                
+                return {
+                    id: 'kr' + Date.now() + index,
+                    description,
+                    unit,
+                    baseline,
+                    target,
+                    realizado: 0, // Será atualizado automaticamente pelos indicadores
+                    varMoM: 0, // Será calculado automaticamente
+                    indicatorPath: indicatorPath || null,
+                    createdAt: new Date().toISOString()
+                };
+            });
+            
+            const newOKR = {
+                id: 'okr' + Date.now(),
+                objetivo,
+                krs,
+                relatedFronts: [], // Será preenchido pelo relacionamento
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            
+            okrs.push(newOKR);
+            saveOKRs();
+            closeNewOKRModal();
+        }
+
+        function calculateOKRStatus(okr) {
+            if (!okr.krs || okr.krs.length === 0) return { status: 'no-data', color: 'bg-gray-100', textColor: 'text-gray-800', label: 'Sem dados' };
+            
+            const avgProgress = okr.krs.reduce((sum, kr) => {
+                const progress = kr.realizado !== undefined && kr.target !== undefined && kr.target !== 0
+                    ? (kr.realizado / kr.target) * 100 : 0;
+                return sum + Math.min(progress, 100);
+            }, 0) / okr.krs.length;
+            
+            if (avgProgress >= 80) return { status: 'on-track', color: 'bg-green-100', textColor: 'text-green-800', label: 'No Prazo', progress: avgProgress };
+            if (avgProgress >= 50) return { status: 'at-risk', color: 'bg-yellow-100', textColor: 'text-yellow-800', label: 'Em Risco', progress: avgProgress };
+            return { status: 'behind', color: 'bg-red-100', textColor: 'text-red-800', label: 'Atrasado', progress: avgProgress };
+        }
+
+        function openFrontsRelationModal(okrId) {
+            showingFrontsRelationModal = okrId;
+            render();
+        }
+
+        function closeFrontsRelationModal() {
+            showingFrontsRelationModal = null;
+            draggedFrontId = null;
+            render();
+        }
+
+        function allowDrop(e) {
+            e.preventDefault();
+        }
+
+        function dragStart(e, frontId) {
+            draggedFrontId = frontId;
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function dropOnOKR(e, okrId) {
+            e.preventDefault();
+            if (!draggedFrontId) return;
+            
+            const okr = okrs.find(o => o.id === okrId);
+            if (!okr) return;
+            
+            if (!okr.relatedFronts) okr.relatedFronts = [];
+            if (!okr.relatedFronts.includes(draggedFrontId)) {
+                okr.relatedFronts.push(draggedFrontId);
+                saveOKRs();
+            }
+            
+            draggedFrontId = null;
+            render();
+        }
+
+        function removeFrontFromOKR(okrId, frontId) {
+            const okr = okrs.find(o => o.id === okrId);
+            if (okr && okr.relatedFronts) {
+                okr.relatedFronts = okr.relatedFronts.filter(f => f !== frontId);
+                saveOKRs();
+                render();
+            }
+        }
+
+        function deleteOKR(okrId) {
+            if (confirm('Tem certeza que deseja deletar este OKR?')) {
+                okrs = okrs.filter(o => o.id !== okrId);
+                saveOKRs();
+                render();
+            }
+        }
+
+        function exportOKRsToCSV() {
+            const headers = ['Objetivo', 'KR', 'Unidade', 'Baseline', 'Target', 'Realizado', 'Var. MoM', 'Frentes Relacionadas'];
+            const rows = [];
+            
+            okrs.forEach(okr => {
+                okr.krs.forEach((kr, idx) => {
+                    const relatedFrontsNames = (okr.relatedFronts || []).map(fId => {
+                        const front = fronts.find(f => f.id === fId);
+                        return front ? front.name : fId;
+                    }).join('; ');
+                    
+                    rows.push([
+                        idx === 0 ? okr.objetivo : '',
+                        kr.description,
+                        kr.unit,
+                        kr.baseline,
+                        kr.target,
+                        kr.realizado || 0,
+                        kr.varMoM || 0,
+                        relatedFrontsNames
+                    ]);
+                });
+            });
+            
+            const csvContent = [headers, ...rows].map(row => 
+                row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+            ).join('\n');
+            
+            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `okrs_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function renderOKRsPage() {
+            return `
+                <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
+                    <div class="max-w-7xl mx-auto px-6 py-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h1 class="text-3xl font-bold text-slate-900">OKRs da Organização</h1>
+                                <p class="text-slate-600 mt-1 text-sm">Defina e acompanhe objetivos e resultados-chave</p>
+                            </div>
+                            <nav class="flex items-center gap-2" aria-label="Navegação principal">
+                                <input id="import-input-okrs" type="file" accept=".csv,.xlsx,.xls" class="hidden">
+                                <button onclick="exportOKRsToCSV()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm" aria-label="Exportar OKRs">
+                                    <i class="fas fa-file-export mr-1" aria-hidden="true"></i> Exportar
+                                </button>
+                                <button onclick="document.getElementById('import-input-okrs').click()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm" aria-label="Importar OKRs">
+                                    <i class="fas fa-file-import mr-1" aria-hidden="true"></i> Importar
+                                </button>
+                                <button onclick="navigateTo('dashboard')" class="px-3 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors text-sm">
+                                    <i class="fas fa-home mr-1" aria-hidden="true"></i> Dashboard
+                                </button>
+                            </nav>
+                        </div>
+                    </div>
+                </header>
+
+                <main class="max-w-7xl mx-auto px-6 py-8">
+                    ${okrs.length === 0 ? `
+                        <div class="bg-white rounded-lg shadow-md p-12 text-center border-2 border-blue-200">
+                            <i class="fas fa-bullseye text-6xl text-blue-400 mb-4" aria-hidden="true"></i>
+                            <h2 class="text-2xl font-bold text-slate-900 mb-2">Comece agora - Defina seus OKRs</h2>
+                            <p class="text-slate-600 mb-6">Ainda não há OKRs cadastrados. Crie seu primeiro objetivo e resultados-chave.</p>
+                            <button onclick="openNewOKRModal()" class="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded-lg transition-colors">
+                                <i class="fas fa-plus mr-2" aria-hidden="true"></i> Criar Primeiro OKR
+                            </button>
+                        </div>
+                    ` : `
+                        <div class="mb-6 flex justify-between items-center">
+                            <h2 class="text-xl font-semibold text-slate-700">${okrs.length} OKR${okrs.length !== 1 ? 's' : ''} cadastrado${okrs.length !== 1 ? 's' : ''}</h2>
+                            <button onclick="openNewOKRModal()" class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                <i class="fas fa-plus mr-2" aria-hidden="true"></i> Novo OKR
+                            </button>
+                        </div>
+                        
+                        <div class="space-y-6">
+                            ${okrs.map(okr => {
+                                const status = calculateOKRStatus(okr);
+                                const relatedFrontsNames = (okr.relatedFronts || []).map(fId => {
+                                    const front = fronts.find(f => f.id === fId);
+                                    return front ? front.name : '';
+                                }).filter(Boolean);
+                                
+                                return `
+                                    <div class="bg-white rounded-lg shadow-md border-2 ${status.color} ${status.textColor} p-6" 
+                                         ondrop="dropOnOKR(event, '${okr.id}')" ondragover="allowDrop(event)">
+                                        <div class="flex items-start justify-between mb-4">
+                                            <div class="flex-1">
+                                                <h3 class="text-xl font-bold mb-2">${okr.objetivo}</h3>
+                                                <div class="flex items-center gap-3">
+                                                    <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold ${status.color} ${status.textColor}">
+                                                        ${status.label}
+                                                    </span>
+                                                    ${status.progress !== undefined ? `<span class="text-sm text-slate-600">Progresso: ${Math.round(status.progress)}%</span>` : ''}
+                                                </div>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <button onclick="openFrontsRelationModal('${okr.id}')" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded transition-colors" aria-label="Relacionar frentes">
+                                                    <i class="fas fa-magnet mr-1" aria-hidden="true"></i> Relacionar Frentes
+                                                </button>
+                                                <button onclick="deleteOKR('${okr.id}')" class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold rounded transition-colors" aria-label="Deletar OKR">
+                                                    <i class="fas fa-trash" aria-hidden="true"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        
+                                        ${relatedFrontsNames.length > 0 ? `
+                                            <div class="mb-4">
+                                                <p class="text-sm font-semibold text-slate-700 mb-2">Frentes Relacionadas:</p>
+                                                <div class="flex flex-wrap gap-2">
+                                                    ${relatedFrontsNames.map(name => `
+                                                        <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">${name}</span>
+                                                    `).join('')}
+                                                </div>
+                                            </div>
+                                        ` : ''}
+                                        
+                                        <div class="space-y-3">
+                                            ${okr.krs.map(kr => {
+                                                const krProgress = kr.target !== 0 ? (kr.realizado / kr.target) * 100 : 0;
+                                                return `
+                                                    <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                                                        <div class="flex items-center justify-between mb-2">
+                                                            <div class="flex-1">
+                                                                <h4 class="font-semibold text-slate-800">${kr.description}</h4>
+                                                                <div class="text-xs text-slate-600 mt-1">
+                                                                    Baseline: ${kr.baseline} ${kr.unit} → Target: ${kr.target} ${kr.unit}
+                                                                </div>
+                                                            </div>
+                                                            <div class="text-right">
+                                                                <div class="text-lg font-bold text-slate-900">${kr.realizado || 0} ${kr.unit}</div>
+                                                                <div class="text-xs text-slate-600">Var. MoM: ${kr.varMoM || 0}%</div>
+                                                            </div>
+                                                        </div>
+                                                        <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                                                            <div class="h-full bg-blue-500 rounded-full transition-all" style="width: ${Math.min(krProgress, 100)}%"></div>
+                                                        </div>
+                                                    </div>
+                                                `;
+                                            }).join('')}
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `}
+                </main>
+
+                <!-- Modal de Criação de OKR -->
+                ${creatingNewOKR ? `
+                    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeNewOKRModal()" role="dialog" aria-modal="true" aria-labelledby="okr-modal-title">
+                        <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                            <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
+                                <h2 id="okr-modal-title" class="text-2xl font-bold text-slate-900">Novo OKR</h2>
+                                <button onclick="closeNewOKRModal()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors" aria-label="Fechar modal">
+                                    <i class="fas fa-times text-slate-600 text-xl" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                            <div class="p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
+                                <div>
+                                    <label for="okr-objetivo" class="block text-sm font-semibold text-slate-700 mb-2">Objetivo *</label>
+                                    <input type="text" id="okr-objetivo" placeholder="Ex: Reduzir tempo de resposta a incidentes em 50%" class="w-full">
+                                </div>
+                                
+                                <div>
+                                    <div class="flex items-center justify-between mb-3">
+                                        <label class="block text-sm font-semibold text-slate-700">Resultados-Chave (KRs)</label>
+                                        <button type="button" onclick="addKRToOKR()" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm font-semibold rounded transition-colors">
+                                            <i class="fas fa-plus mr-1" aria-hidden="true"></i> Adicionar KR
+                                        </button>
+                                    </div>
+                                    <div id="okr-krs-container" class="space-y-3">
+                                        <!-- KRs serão adicionados aqui -->
+                                    </div>
+                                </div>
+                                
+                                <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                    <button onclick="saveNewOKR()" class="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                        <i class="fas fa-save mr-2" aria-hidden="true"></i> Salvar OKR
+                                    </button>
+                                    <button onclick="closeNewOKRModal()" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
+                                        <i class="fas fa-times mr-2" aria-hidden="true"></i> Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+
+                <!-- Modal de Relacionamento com Frentes -->
+                ${showingFrontsRelationModal ? `
+                    <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeFrontsRelationModal()" role="dialog" aria-modal="true">
+                        <div class="bg-white rounded-lg shadow-2xl max-w-3xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                            <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
+                                <h2 class="text-2xl font-bold text-slate-900">Relacionar Frentes de Engenharia</h2>
+                                <button onclick="closeFrontsRelationModal()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors" aria-label="Fechar modal">
+                                    <i class="fas fa-times text-slate-600 text-xl" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                            <div class="p-6">
+                                <p class="text-sm text-slate-600 mb-4">Arraste as frentes da lista abaixo para associá-las ao OKR, ou clique para adicionar/remover.</p>
+                                
+                                <div class="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <h3 class="font-semibold text-slate-800 mb-3">Frentes Disponíveis</h3>
+                                        <div class="space-y-2 max-h-96 overflow-y-auto">
+                                            ${fronts.filter(f => {
+                                                const okr = okrs.find(o => o.id === showingFrontsRelationModal);
+                                                return okr && !okr.relatedFronts.includes(f.id);
+                                            }).map(front => `
+                                                <div draggable="true" ondragstart="dragStart(event, '${front.id}')" 
+                                                     class="p-3 bg-slate-100 hover:bg-slate-200 rounded cursor-move border border-slate-300">
+                                                    <div class="flex items-center gap-2">
+                                                        <i class="fas fa-grip-vertical text-slate-400" aria-hidden="true"></i>
+                                                        <span class="font-medium text-slate-700">${front.name}</span>
+                                                    </div>
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-semibold text-slate-800 mb-3">Frentes Relacionadas</h3>
+                                        <div class="space-y-2 max-h-96 overflow-y-auto" 
+                                             ondrop="dropOnOKR(event, '${showingFrontsRelationModal}')" 
+                                             ondragover="allowDrop(event)">
+                                            ${(() => {
+                                                const okr = okrs.find(o => o.id === showingFrontsRelationModal);
+                                                if (!okr || !okr.relatedFronts || okr.relatedFronts.length === 0) {
+                                                    return '<p class="text-sm text-slate-500 italic">Arraste frentes aqui ou selecione abaixo</p>';
+                                                }
+                                                return okr.relatedFronts.map(fId => {
+                                                    const front = fronts.find(f => f.id === fId);
+                                                    if (!front) return '';
+                                                    return `
+                                                        <div class="p-3 bg-blue-100 border border-blue-300 rounded flex items-center justify-between">
+                                                            <span class="font-medium text-blue-800">${front.name}</span>
+                                                            <button onclick="removeFrontFromOKR('${showingFrontsRelationModal}', '${fId}')" class="text-red-500 hover:text-red-700" aria-label="Remover">
+                                                                <i class="fas fa-times" aria-hidden="true"></i>
+                                                            </button>
+                                                        </div>
+                                                    `;
+                                                }).join('');
+                                            })()}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex gap-3 pt-6 border-t border-slate-200 mt-6">
+                                    <button onclick="closeFrontsRelationModal()" class="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors">
+                                        <i class="fas fa-check mr-2" aria-hidden="true"></i> Fechar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+        }
+
+        // ========== PÁGINA DE INDICADORES (Run the Bank) ==========
+        
+        function updateIndicatorMonth(month) {
+            selectedIndicatorMonth = parseInt(month);
+            render();
+        }
+
+        function updateIndicatorYear(year) {
+            selectedIndicatorYear = parseInt(year);
+            render();
+        }
+
+        function updateIndicatorValue(pilar, indicador, value) {
+            if (!indicators[pilar]) indicators[pilar] = {};
+            if (typeof indicators[pilar] === 'object' && !Array.isArray(indicators[pilar])) {
+                const monthYearKey = `${selectedIndicatorYear}-${String(selectedIndicatorMonth).padStart(2, '0')}`;
+                if (!indicators[pilar][indicador]) indicators[pilar][indicador] = {};
+                indicators[pilar][indicador][monthYearKey] = parseFloat(value) || 0;
+                saveIndicators();
+                
+                // Atualizar OKRs relacionados automaticamente
+                updateOKRsFromIndicators(pilar, indicador, parseFloat(value) || 0);
+            }
+        }
+
+        function updateOKRsFromIndicators(pilar, indicador, value) {
+            const indicatorPath = `${pilar}|${indicador}`;
+            
+            okrs.forEach(okr => {
+                okr.krs.forEach(kr => {
+                    if (kr.indicatorPath === indicatorPath) {
+                        const monthYearKey = `${selectedIndicatorYear}-${String(selectedIndicatorMonth).padStart(2, '0')}`;
+                        kr.realizado = value;
+                        
+                        // Calcular Var. MoM (comparar com mês anterior)
+                        const prevMonth = selectedIndicatorMonth === 1 ? 12 : selectedIndicatorMonth - 1;
+                        const prevYear = selectedIndicatorMonth === 1 ? selectedIndicatorYear - 1 : selectedIndicatorYear;
+                        const prevMonthKey = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+                        
+                        const prevValue = indicators[pilar] && indicators[pilar][indicador] && indicators[pilar][indicador][prevMonthKey]
+                            ? indicators[pilar][indicador][prevMonthKey] : kr.baseline;
+                        
+                        if (prevValue !== 0) {
+                            kr.varMoM = ((value - prevValue) / prevValue) * 100;
+                        } else {
+                            kr.varMoM = 0;
+                        }
+                    }
+                });
+            });
+            saveOKRs();
+        }
+
+        function exportIndicatorsToCSV() {
+            const headers = ['Pilar', 'Indicador', 'Mês/Ano', 'Valor'];
+            const rows = [];
+            
+            Object.entries(indicators).forEach(([pilar, indicadores]) => {
+                if (typeof indicadores === 'object' && indicadores !== null && !Array.isArray(indicadores)) {
+                    Object.entries(indicadores).forEach(([indicador, valores]) => {
+                        if (typeof valores === 'object' && valores !== null) {
+                            Object.entries(valores).forEach(([monthYear, valor]) => {
+                                rows.push([pilar, indicador, monthYear, valor]);
+                            });
+                        }
+                    });
+                }
+            });
+            
+            const csvContent = [headers, ...rows].map(row => 
+                row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+            ).join('\n');
+            
+            const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `indicadores_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function getIndicatorValue(pilar, indicador) {
+            if (!indicators[pilar]) return '';
+            if (typeof indicators[pilar] !== 'object' || indicators[pilar] === null) return '';
+            if (!indicators[pilar][indicador]) return '';
+            
+            const monthYearKey = `${selectedIndicatorYear}-${String(selectedIndicatorMonth).padStart(2, '0')}`;
+            return indicators[pilar][indicador][monthYearKey] || '';
+        }
+
+        function renderIndicatorsPage() {
+            const months = [
+                { value: 1, label: 'Janeiro' }, { value: 2, label: 'Fevereiro' }, { value: 3, label: 'Março' },
+                { value: 4, label: 'Abril' }, { value: 5, label: 'Maio' }, { value: 6, label: 'Junho' },
+                { value: 7, label: 'Julho' }, { value: 8, label: 'Agosto' }, { value: 9, label: 'Setembro' },
+                { value: 10, label: 'Outubro' }, { value: 11, label: 'Novembro' }, { value: 12, label: 'Dezembro' }
+            ];
+            
+            const currentYear = new Date().getFullYear();
+            const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
+            
+            return `
+                <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
+                    <div class="max-w-7xl mx-auto px-6 py-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h1 class="text-3xl font-bold text-slate-900">Evolução de Indicadores</h1>
+                                <p class="text-slate-600 mt-1 text-sm">Run the Bank - Alimentação mensal de métricas</p>
+                            </div>
+                            <nav class="flex items-center gap-2" aria-label="Navegação principal">
+                                <input id="import-input-indicators" type="file" accept=".csv,.xlsx,.xls" class="hidden">
+                                <button onclick="exportIndicatorsToCSV()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm" aria-label="Exportar Indicadores">
+                                    <i class="fas fa-file-export mr-1" aria-hidden="true"></i> Exportar
+                                </button>
+                                <button onclick="document.getElementById('import-input-indicators').click()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm" aria-label="Importar Indicadores">
+                                    <i class="fas fa-file-import mr-1" aria-hidden="true"></i> Importar
+                                </button>
+                                <button onclick="navigateTo('dashboard')" class="px-3 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors text-sm">
+                                    <i class="fas fa-home mr-1" aria-hidden="true"></i> Dashboard
+                                </button>
+                            </nav>
+                        </div>
+                    </div>
+                </header>
+
+                <main class="max-w-7xl mx-auto px-6 py-8">
+                    <div class="mb-6 flex items-center gap-4">
+                        <div class="flex items-center gap-2">
+                            <label for="indicator-month" class="text-sm font-semibold text-slate-700">Mês:</label>
+                            <select id="indicator-month" onchange="updateIndicatorMonth(this.value)" class="px-3 py-2 border border-slate-300 rounded">
+                                ${months.map(m => `
+                                    <option value="${m.value}" ${m.value === selectedIndicatorMonth ? 'selected' : ''}>${m.label}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label for="indicator-year" class="text-sm font-semibold text-slate-700">Ano:</label>
+                            <select id="indicator-year" onchange="updateIndicatorYear(this.value)" class="px-3 py-2 border border-slate-300 rounded">
+                                ${years.map(y => `
+                                    <option value="${y}" ${y === selectedIndicatorYear ? 'selected' : ''}>${y}</option>
+                                `).join('')}
+                            </select>
+                        </div>
+                        <div class="ml-auto">
+                            <p class="text-sm text-slate-600">Os valores são salvos automaticamente</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-8">
+                        ${Object.entries(indicators).map(([pilar, indicadores]) => {
+                            if (typeof indicadores !== 'object' || indicadores === null || Array.isArray(indicadores)) {
+                                return `
+                                    <div class="bg-white rounded-lg shadow-md border-2 border-slate-200 p-6">
+                                        <h2 class="text-xl font-bold text-slate-900 mb-4">${pilar}</h2>
+                                        <p class="text-slate-500 italic">Este pilar não possui indicadores específicos configurados.</p>
+                                    </div>
+                                `;
+                            }
+                            
+                            const indicadorKeys = Object.keys(indicadores);
+                            if (indicadorKeys.length === 0) {
+                                return `
+                                    <div class="bg-white rounded-lg shadow-md border-2 border-slate-200 p-6">
+                                        <h2 class="text-xl font-bold text-slate-900 mb-4">${pilar}</h2>
+                                        <p class="text-slate-500 italic">Nenhum indicador cadastrado para este pilar.</p>
+                                    </div>
+                                `;
+                            }
+                            
+                            return `
+                                <div class="bg-white rounded-lg shadow-md border-2 border-slate-200 p-6">
+                                    <h2 class="text-xl font-bold text-slate-900 mb-6">${pilar}</h2>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full">
+                                            <thead>
+                                                <tr class="border-b border-slate-200">
+                                                    <th class="text-left py-3 px-4 font-semibold text-slate-700">Indicador</th>
+                                                    <th class="text-right py-3 px-4 font-semibold text-slate-700">Valor (${months.find(m => m.value === selectedIndicatorMonth)?.label || selectedIndicatorMonth}/${selectedIndicatorYear})</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                ${indicadorKeys.map(indicador => {
+                                                    const currentValue = getIndicatorValue(pilar, indicador);
+                                                    return `
+                                                        <tr class="border-b border-slate-100 hover:bg-slate-50">
+                                                            <td class="py-3 px-4 text-slate-800">${indicador}</td>
+                                                            <td class="py-3 px-4">
+                                                                <input type="number" 
+                                                                       step="0.01" 
+                                                                       value="${currentValue}" 
+                                                                       onchange="updateIndicatorValue('${pilar}', '${indicador}', this.value)"
+                                                                       placeholder="0.00"
+                                                                       class="w-full max-w-xs ml-auto text-right border border-slate-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                            </td>
+                                                        </tr>
+                                                    `;
+                                                }).join('')}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                    
+                    <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
+                        <div class="flex items-start gap-3">
+                            <i class="fas fa-info-circle text-blue-500 text-xl mt-1" aria-hidden="true"></i>
+                            <div>
+                                <h3 class="font-semibold text-blue-900 mb-2">Como funciona:</h3>
+                                <ul class="text-sm text-blue-800 space-y-1">
+                                    <li>• Selecione o mês e ano para visualizar/editar os valores</li>
+                                    <li>• Os valores são salvos automaticamente ao alterar</li>
+                                    <li>• OKRs relacionados são atualizados automaticamente quando você preenche um indicador</li>
+                                    <li>• A variação MoM (Mês a Mês) é calculada automaticamente comparando com o mês anterior</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            `;
+        }
+
         function renderJourneysPage() {
             return `
                 <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
@@ -2066,10 +3091,24 @@
 
         function render() {
             const app = document.getElementById('app');
-            if (currentPage === 'journeys') {
-                app.innerHTML = renderJourneysPage();
-            } else {
-                app.innerHTML = renderFrontsPage();
+            
+            switch(currentPage) {
+                case 'dashboard':
+                    app.innerHTML = renderDashboardPage();
+                    break;
+                case 'okrs':
+                    app.innerHTML = renderOKRsPage();
+                    break;
+                case 'indicators':
+                    app.innerHTML = renderIndicatorsPage();
+                    break;
+                case 'journeys':
+                    app.innerHTML = renderJourneysPage();
+                    break;
+                case 'fronts':
+                default:
+                    app.innerHTML = renderFrontsPage();
+                    break;
             }
 
             document.onkeydown = function(e) {
