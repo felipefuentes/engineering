@@ -784,6 +784,11 @@
             const journey = journeys.find(j => j.id === selectedEventJourneyId);
             if (!journey) return;
 
+            // Garantir que o array events existe
+            if (!journey.events) {
+                journey.events = [];
+            }
+
             const newRisk = {
                 id: 'risk' + Date.now(),
                 category: 'Riscos',
@@ -3015,6 +3020,187 @@
             saveOKRs();
         }
 
+        function handleRiskImport(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const text = e.target.result;
+                    const lines = text.split('\n').filter(line => line.trim());
+                    
+                    if (lines.length < 2) {
+                        alert('Arquivo vazio ou inválido. O arquivo deve conter pelo menos o cabeçalho e uma linha de dados.');
+                        return;
+                    }
+
+                    // Parse do CSV (simplificado - assume que está separado por vírgula e com aspas opcionais)
+                    const headers = parseCSVLine(lines[0]);
+                    const dataLines = lines.slice(1);
+
+                    // Mapear índices das colunas esperadas
+                    const columnMap = {};
+                    headers.forEach((header, index) => {
+                        const normalizedHeader = header.trim().toLowerCase();
+                        if (normalizedHeader.includes('id') && (normalizedHeader.includes('planner') || normalizedHeader.includes('task'))) {
+                            columnMap.plannerId = index;
+                        } else if (normalizedHeader.includes('nome') && normalizedHeader.includes('tarefa')) {
+                            columnMap.taskName = index;
+                        } else if (normalizedHeader.includes('bucket') || (normalizedHeader.includes('jornada'))) {
+                            columnMap.bucket = index;
+                        } else if (normalizedHeader.includes('progresso')) {
+                            columnMap.progress = index;
+                        } else if (normalizedHeader.includes('prioridade') || normalizedHeader.includes('priority')) {
+                            columnMap.priority = index;
+                        } else if (normalizedHeader.includes('atribuído') || normalizedHeader.includes('assigned')) {
+                            columnMap.assignedTo = index;
+                        } else if (normalizedHeader.includes('criado por') || normalizedHeader.includes('created by')) {
+                            columnMap.createdBy = index;
+                        } else if (normalizedHeader.includes('criado em') || normalizedHeader.includes('created at')) {
+                            columnMap.createdAt = index;
+                        } else if (normalizedHeader.includes('data de início') || normalizedHeader.includes('start date')) {
+                            columnMap.startDate = index;
+                        } else if (normalizedHeader.includes('data de conclusão') || normalizedHeader.includes('due date') || normalizedHeader.includes('data de concluir')) {
+                            columnMap.dueDate = index;
+                        } else if (normalizedHeader.includes('recorrente') || normalizedHeader.includes('recurring')) {
+                            columnMap.isRecurring = index;
+                        } else if (normalizedHeader.includes('atrasado') || normalizedHeader.includes('overdue')) {
+                            columnMap.isOverdue = index;
+                        } else if (normalizedHeader.includes('concluído em') || normalizedHeader.includes('completed at')) {
+                            columnMap.completedAt = index;
+                        } else if (normalizedHeader.includes('concluído por') || normalizedHeader.includes('completed by')) {
+                            columnMap.completedBy = index;
+                        } else if (normalizedHeader.includes('checklist') || normalizedHeader.includes('lista de verificação')) {
+                            columnMap.checklist = index;
+                        } else if (normalizedHeader.includes('rótulo') || normalizedHeader.includes('label')) {
+                            columnMap.labels = index;
+                        } else if (normalizedHeader.includes('descrição') || normalizedHeader.includes('description')) {
+                            columnMap.description = index;
+                        } else if (normalizedHeader.includes('concluído') && !normalizedHeader.includes('em') && !normalizedHeader.includes('por') || normalizedHeader.includes('completed')) {
+                            columnMap.isCompleted = index;
+                        }
+                    });
+
+                    // Validar campos obrigatórios
+                    if (columnMap.plannerId === undefined || columnMap.taskName === undefined || columnMap.bucket === undefined) {
+                        alert('Arquivo inválido! O arquivo deve conter as colunas: ID do Planner, Nome da Tarefa e Bucket (Jornada).');
+                        return;
+                    }
+
+                    let importedCount = 0;
+                    let errors = [];
+
+                    dataLines.forEach((line, lineIndex) => {
+                        if (!line.trim()) return;
+                        
+                        try {
+                            const values = parseCSVLine(line);
+                            
+                            const plannerId = values[columnMap.plannerId]?.trim();
+                            const taskName = values[columnMap.taskName]?.trim();
+                            const bucketName = values[columnMap.bucket]?.trim();
+
+                            if (!plannerId || !taskName || !bucketName) {
+                                errors.push(`Linha ${lineIndex + 2}: Campos obrigatórios ausentes`);
+                                return;
+                            }
+
+                            // Encontrar jornada pelo nome ou sigla
+                            const journey = journeys.find(j => 
+                                j.name.toLowerCase() === bucketName.toLowerCase() || 
+                                j.acronym.toLowerCase() === bucketName.toLowerCase()
+                            );
+
+                            if (!journey) {
+                                errors.push(`Linha ${lineIndex + 2}: Jornada "${bucketName}" não encontrada`);
+                                return;
+                            }
+
+                            // Garantir que o array events existe
+                            if (!journey.events) {
+                                journey.events = [];
+                            }
+
+                            // Criar objeto de risco
+                            const newRisk = {
+                                id: 'risk' + Date.now() + lineIndex,
+                                category: 'Riscos',
+                                plannerId: plannerId,
+                                taskName: taskName,
+                                bucket: journey.id,
+                                progress: parseInt(values[columnMap.progress]) || 0,
+                                priority: values[columnMap.priority]?.trim() || '',
+                                assignedTo: values[columnMap.assignedTo]?.trim() || '',
+                                createdBy: values[columnMap.createdBy]?.trim() || '',
+                                createdAt: values[columnMap.createdAt]?.trim() || '',
+                                startDate: values[columnMap.startDate]?.trim() || '',
+                                dueDate: values[columnMap.dueDate]?.trim() || '',
+                                isRecurring: values[columnMap.isRecurring]?.trim().toLowerCase() === 'true' || values[columnMap.isRecurring]?.trim().toLowerCase() === 'sim',
+                                isOverdue: values[columnMap.isOverdue]?.trim().toLowerCase() === 'true' || values[columnMap.isOverdue]?.trim().toLowerCase() === 'sim',
+                                isCompleted: values[columnMap.isCompleted]?.trim().toLowerCase() === 'true' || values[columnMap.isCompleted]?.trim().toLowerCase() === 'sim',
+                                completedAt: values[columnMap.completedAt]?.trim() || '',
+                                completedBy: values[columnMap.completedBy]?.trim() || '',
+                                checklist: values[columnMap.checklist]?.trim() || '',
+                                labels: values[columnMap.labels]?.trim() || '',
+                                description: values[columnMap.description]?.trim() || ''
+                            };
+
+                            journey.events.push(newRisk);
+                            importedCount++;
+                        } catch (err) {
+                            errors.push(`Linha ${lineIndex + 2}: ${err.message}`);
+                        }
+                    });
+
+                    if (importedCount > 0) {
+                        saveJourneys();
+                        let message = `${importedCount} risco(s) importado(s) com sucesso!`;
+                        if (errors.length > 0) {
+                            message += `\n\nErros encontrados (${errors.length}):\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? `\n... e mais ${errors.length - 5} erro(s)` : ''}`;
+                        }
+                        alert(message);
+                        render();
+                    } else {
+                        alert('Nenhum risco foi importado. Verifique o formato do arquivo e tente novamente.\n\nErros:\n' + errors.slice(0, 10).join('\n'));
+                    }
+
+                    // Limpar o input
+                    event.target.value = '';
+                } catch (err) {
+                    alert('Erro ao processar arquivo: ' + err.message);
+                    event.target.value = '';
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    if (inQuotes && line[i + 1] === '"') {
+                        current += '"';
+                        i++; // Pular próximo "
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            result.push(current); // Adicionar último campo
+            return result;
+        }
+
         function exportIndicatorsToCSV() {
             const headers = ['Pilar', 'Indicador', 'Mês/Ano', 'Valor'];
             const rows = [];
@@ -3079,11 +3265,15 @@
                                     <i class="fas fa-home mr-1" aria-hidden="true"></i> Dashboard
                                 </button>
                                 <input id="import-input-indicators" type="file" accept=".csv,.xlsx,.xls" class="hidden">
+                                <input id="import-input-risks" type="file" accept=".csv,.xlsx,.xls" class="hidden" onchange="handleRiskImport(event)">
                                 <button onclick="exportIndicatorsToCSV()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm" aria-label="Exportar Indicadores">
                                     <i class="fas fa-file-export mr-1" aria-hidden="true"></i> Exportar
                                 </button>
                                 <button onclick="document.getElementById('import-input-indicators').click()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors text-sm" aria-label="Importar Indicadores">
                                     <i class="fas fa-file-import mr-1" aria-hidden="true"></i> Importar
+                                </button>
+                                <button onclick="document.getElementById('import-input-risks').click()" class="px-3 py-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Importar Riscos">
+                                    <i class="fas fa-exclamation-triangle mr-1" aria-hidden="true"></i> Importar Riscos
                                 </button>
                             </nav>
                         </div>
