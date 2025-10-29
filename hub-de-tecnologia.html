@@ -620,6 +620,7 @@
         // Estados para Indicadores
         let selectedIndicatorMonth = new Date().getMonth() + 1;
         let selectedIndicatorYear = new Date().getFullYear();
+        let selectedIndicatorPillar = null; // null = visão estratégica, senão mostra o pilar selecionado
 
         function saveUIState() {
             const uiState = {
@@ -3179,6 +3180,11 @@
             render();
         }
 
+        function updateIndicatorPillar(pillar) {
+            selectedIndicatorPillar = pillar === 'all' ? null : pillar;
+            render();
+        }
+
         function updateIndicatorValue(pilar, indicador, value) {
             if (!indicators[pilar]) indicators[pilar] = {};
             if (typeof indicators[pilar] === 'object' && !Array.isArray(indicators[pilar])) {
@@ -3611,7 +3617,16 @@
                 </header>
 
                 <main class="max-w-7xl mx-auto px-6 py-8">
-                    <div class="mb-6 flex items-center gap-4">
+                    <div class="mb-6 flex items-center gap-4 flex-wrap">
+                        <div class="flex items-center gap-2">
+                            <label for="indicator-pillar" class="text-sm font-semibold text-slate-700">Pilar:</label>
+                            <select id="indicator-pillar" onchange="updateIndicatorPillar(this.value)" class="px-3 py-2 border border-slate-300 rounded">
+                                <option value="all" ${selectedIndicatorPillar === null ? 'selected' : ''}>📊 Visão Estratégica (Todos)</option>
+                                ${Object.keys(indicators).filter(p => p !== 'defaultIndicators').map(pilar => `
+                                    <option value="${pilar}" ${selectedIndicatorPillar === pilar ? 'selected' : ''}>${pilar}</option>
+                                `).join('')}
+                            </select>
+                        </div>
                         <div class="flex items-center gap-2">
                             <label for="indicator-month" class="text-sm font-semibold text-slate-700">Mês:</label>
                             <select id="indicator-month" onchange="updateIndicatorMonth(this.value)" class="px-3 py-2 border border-slate-300 rounded">
@@ -3733,30 +3748,73 @@
                         `;
                     })()}
 
-                    <div class="space-y-8">
-                        ${Object.entries(indicators).map(([pilar, indicadores]) => {
-                            if (typeof indicadores !== 'object' || indicadores === null || Array.isArray(indicadores)) {
+                    <!-- Renderização baseada no pilar selecionado -->
+                    ${selectedIndicatorPillar === null ? 
+                        // VISÃO ESTRATÉGICA - Lista todos os pilares como cards compactos
+                        `
+                        <div class="grid grid-cols-1 gap-4">
+                            ${Object.entries(indicators).filter(([pilar]) => pilar !== 'defaultIndicators').map(([pilar, indicadores]) => {
+                                if (typeof indicadores !== 'object' || indicadores === null || Array.isArray(indicadores)) {
+                                    return '';
+                                }
+                                
+                                const indicadorKeys = Object.keys(indicadores);
+                                if (indicadorKeys.length === 0) return '';
+                                
+                                // Calcular totais e estatísticas do pilar
+                                let totalValue = 0;
+                                let filledCount = 0;
+                                indicadorKeys.forEach(indicador => {
+                                    const value = getIndicatorValue(pilar, indicador);
+                                    if (value && value > 0) {
+                                        totalValue += parseFloat(value);
+                                        filledCount++;
+                                    }
+                                });
+                                
                                 return `
-                                    <div class="bg-white rounded-lg shadow-md border-2 border-slate-200 p-6">
-                                        <h2 class="text-xl font-bold text-slate-900 mb-4">${pilar}</h2>
-                                        <p class="text-slate-500 italic">Este pilar não possui indicadores específicos configurados.</p>
+                                    <div class="bg-white rounded-lg shadow-md border-2 border-slate-200 p-6 hover:border-blue-400 transition-colors cursor-pointer" onclick="updateIndicatorPillar('${pilar}')">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex-1">
+                                                <h3 class="text-xl font-bold text-slate-900 mb-2">${pilar}</h3>
+                                                <p class="text-sm text-slate-600">${indicadorKeys.length} indicador${indicadorKeys.length !== 1 ? 'es' : ''} • ${filledCount} preenchidos</p>
+                                            </div>
+                                            <div class="text-right">
+                                                <div class="text-2xl font-bold text-blue-600">${filledCount > 0 ? Math.round((filledCount / indicadorKeys.length) * 100) : 0}%</div>
+                                                <p class="text-xs text-slate-500">completude</p>
+                                            </div>
+                                            <button class="ml-4 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors">
+                                                <i class="fas fa-arrow-right mr-1"></i> Editar
+                                            </button>
+                                        </div>
                                     </div>
                                 `;
+                            }).join('')}
+                        </div>
+                        ` 
+                        : 
+                        // VISÃO DE PILAR ÚNICO - Mostra tabela detalhada
+                        (() => {
+                            const pilar = selectedIndicatorPillar;
+                            const indicadores = indicators[pilar];
+                            
+                            if (typeof indicadores !== 'object' || indicadores === null || Array.isArray(indicadores)) {
+                                return '<div class="bg-white rounded-lg shadow-md border-2 border-slate-200 p-6"><p class="text-slate-500 italic">Este pilar não possui indicadores específicos configurados.</p></div>';
                             }
                             
                             const indicadorKeys = Object.keys(indicadores);
                             if (indicadorKeys.length === 0) {
-                                return `
-                                    <div class="bg-white rounded-lg shadow-md border-2 border-slate-200 p-6">
-                                        <h2 class="text-xl font-bold text-slate-900 mb-4">${pilar}</h2>
-                                        <p class="text-slate-500 italic">Nenhum indicador cadastrado para este pilar.</p>
-                                    </div>
-                                `;
+                                return '<div class="bg-white rounded-lg shadow-md border-2 border-slate-200 p-6"><p class="text-slate-500 italic">Nenhum indicador cadastrado para este pilar.</p></div>';
                             }
                             
                             return `
-                                <div class="bg-white rounded-lg shadow-md border-2 border-slate-200 p-6">
-                                    <h2 class="text-xl font-bold text-slate-900 mb-6">${pilar}</h2>
+                                <div class="bg-white rounded-lg shadow-md border-2 border-blue-400 p-6">
+                                    <div class="flex items-center justify-between mb-6">
+                                        <h2 class="text-2xl font-bold text-slate-900">${pilar}</h2>
+                                        <button onclick="updateIndicatorPillar('all')" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold rounded transition-colors">
+                                            <i class="fas fa-arrow-left mr-1"></i> Voltar
+                                        </button>
+                                    </div>
                                     <div class="overflow-x-auto">
                                         <table class="w-full">
                                             <thead>
@@ -3794,8 +3852,8 @@
                                     </div>
                                 </div>
                             `;
-                        }).join('')}
-                    </div>
+                        })()
+                    }
                     
                     <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
                         <div class="flex items-start gap-3">
@@ -3803,7 +3861,8 @@
                             <div>
                                 <h3 class="font-semibold text-blue-900 mb-2">Como funciona:</h3>
                                 <ul class="text-sm text-blue-800 space-y-1">
-                                    <li>• Selecione o mês e ano para visualizar/editar os valores</li>
+                                    <li>• <strong>Visão Estratégica:</strong> Veja todos os pilares e a completude de cada um</li>
+                                    <li>• <strong>Pilar específico:</strong> Selecione um pilar para preencher os dados mensais</li>
                                     <li>• Os valores são salvos automaticamente ao alterar</li>
                                     <li>• OKRs relacionados são atualizados automaticamente quando você preenche um indicador</li>
                                     <li>• A variação MoM (Mês a Mês) é calculada automaticamente comparando com o mês anterior</li>
