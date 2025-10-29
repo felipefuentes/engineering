@@ -596,6 +596,7 @@
         let showRiskForm = false;
         let showRiskOverview = false;
         let riskOverviewJourneyId = null;
+        let expandedJourneySections = {}; // Armazena seções expandidas por jornada
         let showIncidentOverview = false;
         let incidentOverviewJourneyId = null;
         
@@ -679,6 +680,17 @@
             showRiskOverview = false;
             riskOverviewJourneyId = null;
             render();
+        }
+
+        function toggleJourneySection(journeyId, sectionName) {
+            const key = `${journeyId}_${sectionName}`;
+            expandedJourneySections[key] = !expandedJourneySections[key];
+            render();
+        }
+
+        function isJourneySectionExpanded(journeyId, sectionName) {
+            const key = `${journeyId}_${sectionName}`;
+            return expandedJourneySections[key] || false;
         }
 
         function openEventModal(journeyId) {
@@ -3472,43 +3484,70 @@
                                     </div>
 
                                     <!-- Gráfico de Evolução Temporal -->
-                                    <div class="mb-6 border-t border-slate-200 pt-6">
-                                        <h4 class="font-semibold text-slate-800 mb-4">Evolução Temporal da Maturidade</h4>
-                                        ${renderJourneyEvolutionChart(journey)}
-                                    </div>
+                                    ${(() => {
+                                        const sectionKey = 'evolution';
+                                        const isExpanded = isJourneySectionExpanded(journey.id, sectionKey);
+                                        return `
+                                            <div class="mb-6 border-t border-slate-200 pt-6">
+                                                <button onclick="toggleJourneySection('${journey.id}', '${sectionKey}')" class="flex items-center justify-between w-full text-left mb-4 hover:text-blue-600 transition-colors">
+                                                    <h4 class="font-semibold text-slate-800">Evolução Temporal da Maturidade</h4>
+                                                    <i class="fas fa-chevron-${isExpanded ? 'up' : 'down'} text-slate-400"></i>
+                                                </button>
+                                                ${isExpanded ? `
+                                                    <div>
+                                                        ${renderJourneyEvolutionChart(journey)}
+                                                    </div>
+                                                ` : `
+                                                    <div class="text-sm text-slate-500 italic">
+                                                        Clique para visualizar o gráfico de evolução temporal da maturidade.
+                                                    </div>
+                                                `}
+                                            </div>
+                                        `;
+                                    })()}
 
                                     <!-- Contribuição para OKRs -->
-                                    <div class="mb-6 border-t border-slate-200 pt-6">
-                                        <h4 class="font-semibold text-slate-800 mb-4">Contribuição para OKRs</h4>
-                                        ${(() => {
-                                            // Buscar OKRs relacionados através de frentes que possam estar ligadas a esta jornada
-                                            // Por enquanto, mostrar uma mensagem informativa
-                                            const relatedOKRs = getJourneyOKRsContribution(journey.id);
-                                            
-                                            if (relatedOKRs.length > 0) {
-                                                return `
-                                                    <div class="space-y-2">
-                                                        ${relatedOKRs.map(okr => {
-                                                            const okrStatus = calculateOKRStatus(okr);
-                                                            return `
-                                                                <div class="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded">
-                                                                    <span class="text-sm font-medium text-blue-900">${okr.objetivo}</span>
-                                                                    <span class="text-xs px-2 py-1 rounded ${okrStatus.color} ${okrStatus.textColor}">${okrStatus.label}</span>
-                                                                </div>
-                                                            `;
-                                                        }).join('')}
+                                    ${(() => {
+                                        const sectionKey = 'okrs';
+                                        const isExpanded = isJourneySectionExpanded(journey.id, sectionKey);
+                                        const relatedOKRs = getJourneyOKRsContribution(journey.id);
+                                        
+                                        return `
+                                            <div class="mb-6 border-t border-slate-200 pt-6">
+                                                <button onclick="toggleJourneySection('${journey.id}', '${sectionKey}')" class="flex items-center justify-between w-full text-left mb-4 hover:text-blue-600 transition-colors">
+                                                    <h4 class="font-semibold text-slate-800">Contribuição para OKRs</h4>
+                                                    <div class="flex items-center gap-2">
+                                                        ${relatedOKRs.length > 0 ? `<span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">${relatedOKRs.length}</span>` : ''}
+                                                        <i class="fas fa-chevron-${isExpanded ? 'up' : 'down'} text-slate-400"></i>
                                                     </div>
-                                                `;
-                                            } else {
-                                                return `
-                                                    <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
-                                                        <i class="fas fa-info-circle text-slate-400 text-2xl mb-2" aria-hidden="true"></i>
-                                                        <p class="text-sm text-slate-600">A contribuição para OKRs é calculada através do relacionamento com frentes de engenharia.</p>
+                                                </button>
+                                                ${isExpanded ? `
+                                                    ${relatedOKRs.length > 0 ? `
+                                                        <div class="space-y-2">
+                                                            ${relatedOKRs.map(okr => {
+                                                                const okrStatus = calculateOKRStatus(okr);
+                                                                return `
+                                                                    <div class="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded">
+                                                                        <span class="text-sm font-medium text-blue-900">${okr.objetivo}</span>
+                                                                        <span class="text-xs px-2 py-1 rounded ${okrStatus.color} ${okrStatus.textColor}">${okrStatus.label}</span>
+                                                                    </div>
+                                                                `;
+                                                            }).join('')}
+                                                        </div>
+                                                    ` : `
+                                                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-center">
+                                                            <i class="fas fa-info-circle text-slate-400 text-2xl mb-2" aria-hidden="true"></i>
+                                                            <p class="text-sm text-slate-600">A contribuição para OKRs é calculada através do relacionamento com frentes de engenharia.</p>
+                                                        </div>
+                                                    `}
+                                                ` : `
+                                                    <div class="text-sm text-slate-500 italic">
+                                                        Clique para visualizar os OKRs relacionados ${relatedOKRs.length > 0 ? `(${relatedOKRs.length} OKR${relatedOKRs.length !== 1 ? 's' : ''})` : ''}.
                                                     </div>
-                                                `;
-                                            }
-                                        })()}
-                                    </div>
+                                                `}
+                                            </div>
+                                        `;
+                                    })()}
 
                                     <div class="flex gap-3">
                                         <button onclick="openEventModal('${journey.id}')" class="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors text-sm">
