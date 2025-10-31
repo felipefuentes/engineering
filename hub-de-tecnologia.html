@@ -589,6 +589,22 @@
         function saveProjects() {
             localStorage.setItem('projects', JSON.stringify(projects));
         }
+
+        // Dados para Painel Executivo
+        const defaultExecutivoPanels = [];
+        let executivoPanels = JSON.parse(localStorage.getItem('executivoPanels')) || JSON.parse(JSON.stringify(defaultExecutivoPanels));
+        
+        function saveExecutivoPanels() {
+            localStorage.setItem('executivoPanels', JSON.stringify(executivoPanels));
+        }
+
+        // Sistema de Coleções de Painéis Executivos
+        const defaultExecutivoCollections = [];
+        let executivoCollections = JSON.parse(localStorage.getItem('executivoCollections')) || JSON.parse(JSON.stringify(defaultExecutivoCollections));
+        
+        function saveExecutivoCollections() {
+            localStorage.setItem('executivoCollections', JSON.stringify(executivoCollections));
+        }
         
         let currentPage = 'dashboard'; // Dashboard como página padrão
         let selectedFrontId = null;
@@ -634,6 +650,15 @@
         let selectedIndicatorMonth = new Date().getMonth() + 1;
         let selectedIndicatorYear = new Date().getFullYear();
         let selectedIndicatorPillar = null; // null = visão estratégica, senão mostra o pilar selecionado
+
+        // Estados para Painel Executivo
+        let creatingNewExecutivoPanel = false;
+        let editingExecutivoPanelId = null;
+        let currentExecutivoPanelIndex = 0;
+        let executivoCarouselAutoPlay = false;
+        let selectedExecutivoCollectionId = null; // null = lista de coleções, string = carrossel da coleção
+        let creatingNewExecutivoCollection = false;
+        let editingExecutivoCollectionId = null;
 
         function saveUIState() {
             const uiState = {
@@ -1122,6 +1147,52 @@
             URL.revokeObjectURL(url);
         }
 
+        function exportAllData() {
+            // Coletar todos os dados do sistema
+            const allData = {
+                version: '1.0',
+                exportDate: Date.now(),
+                exportDateISO: new Date().toISOString(),
+                data: {
+                    fronts: fronts,
+                    journeys: journeys,
+                    okrs: okrs,
+                    indicators: indicators,
+                    projects: projects,
+                    executivoPanels: executivoPanels,
+                    executivoCollections: executivoCollections,
+                    uiState: {
+                        currentPage,
+                        filtersExpanded,
+                        filters
+                    }
+                },
+                metadata: {
+                    frontsCount: fronts.length,
+                    journeysCount: journeys.length,
+                    okrsCount: okrs.length,
+                    projectsCount: projects.length,
+                    executivoPanelsCount: executivoPanels.length,
+                    executivoCollectionsCount: executivoCollections.length,
+                    indicatorsPillarsCount: Object.keys(indicators).filter(k => k !== 'defaultIndicators').length
+                }
+            };
+            
+            const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const dateStr = new Date().toISOString().split('T')[0];
+            a.href = url;
+            a.download = `hub-tecnologia-backup-completo_${dateStr}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            // Mostrar mensagem de sucesso
+            alert(`Backup completo exportado com sucesso!\n\nConteúdo:\n- ${allData.metadata.frontsCount} Frentes\n- ${allData.metadata.journeysCount} Jornadas\n- ${allData.metadata.okrsCount} OKRs\n- ${allData.metadata.projectsCount} Projetos\n- ${allData.metadata.executivoPanelsCount} Painéis Executivos\n- ${allData.metadata.indicatorsPillarsCount} Pilares de Indicadores`);
+        }
+
         function importDataFromFile(file) {
             const reader = new FileReader();
             reader.onload = function() {
@@ -1141,10 +1212,112 @@
             reader.readAsText(file);
         }
 
+        function importAllDataFromFile(file) {
+            const reader = new FileReader();
+            reader.onload = function() {
+                try {
+                    const data = JSON.parse(reader.result);
+                    if (!data || typeof data !== 'object') throw new Error('Formato inválido');
+                    
+                    // Verificar se é backup completo ou backup antigo (apenas fronts/journeys)
+                    let backupData = data;
+                    if (data.data && typeof data.data === 'object') {
+                        // Novo formato de backup completo
+                        backupData = data.data;
+                        
+                        // Mostrar informações do backup
+                        if (data.metadata) {
+                            const metadata = data.metadata;
+                            const info = `Backup encontrado!\n\nData: ${data.exportDateISO ? new Date(data.exportDateISO).toLocaleString('pt-BR') : 'Data não disponível'}\n\nConteúdo:\n- ${metadata.frontsCount || 0} Frentes\n- ${metadata.journeysCount || 0} Jornadas\n- ${metadata.okrsCount || 0} OKRs\n- ${metadata.projectsCount || 0} Projetos\n- ${metadata.executivoPanelsCount || 0} Painéis Executivos\n- ${metadata.executivoCollectionsCount || 0} Coleções Executivas\n- ${metadata.indicatorsPillarsCount || 0} Pilares de Indicadores\n\nDeseja importar todos esses dados?`;
+                            if (!confirm(info)) return;
+                        }
+                    } else {
+                        // Formato antigo - apenas fronts e journeys
+                        if (!confirm('Arquivo de backup antigo detectado (apenas Frentes e Jornadas). Importar?')) return;
+                    }
+                    
+                    // Importar dados
+                    let importedCount = 0;
+                    
+                    if (Array.isArray(backupData.fronts)) {
+                        fronts = backupData.fronts;
+                        saveFronts();
+                        importedCount++;
+                    }
+                    
+                    if (Array.isArray(backupData.journeys)) {
+                        journeys = backupData.journeys;
+                        saveJourneys();
+                        importedCount++;
+                    }
+                    
+                    if (Array.isArray(backupData.okrs)) {
+                        okrs = backupData.okrs;
+                        saveOKRs();
+                        importedCount++;
+                    }
+                    
+                    if (backupData.indicators && typeof backupData.indicators === 'object') {
+                        indicators = backupData.indicators;
+                        saveIndicators();
+                        importedCount++;
+                    }
+                    
+                    if (Array.isArray(backupData.projects)) {
+                        projects = backupData.projects;
+                        saveProjects();
+                        importedCount++;
+                    }
+                    
+                    if (Array.isArray(backupData.executivoPanels)) {
+                        executivoPanels = backupData.executivoPanels;
+                        saveExecutivoPanels();
+                        importedCount++;
+                    }
+                    
+                    if (Array.isArray(backupData.executivoCollections)) {
+                        executivoCollections = backupData.executivoCollections;
+                        saveExecutivoCollections();
+                        importedCount++;
+                    }
+                    
+                    if (backupData.uiState && typeof backupData.uiState === 'object') {
+                        if (backupData.uiState.currentPage) currentPage = backupData.uiState.currentPage;
+                        if (typeof backupData.uiState.filtersExpanded === 'boolean') filtersExpanded = backupData.uiState.filtersExpanded;
+                        if (backupData.uiState.filters && typeof backupData.uiState.filters === 'object') {
+                            filters = Object.assign(filters, backupData.uiState.filters);
+                        }
+                        saveUIState();
+                    }
+                    
+                    // Recarregar página para aplicar todos os dados
+                    render();
+                    
+                    // Mensagem de sucesso
+                    setTimeout(() => {
+                        alert(`Backup importado com sucesso!\n\n${importedCount} tipo(s) de dados restaurado(s).`);
+                    }, 100);
+                    
+                } catch (e) {
+                    alert(`Erro ao importar backup: ${e.message}\n\nVerifique se o arquivo é um backup válido do Hub de Tecnologia.`);
+                    console.error('Erro na importação:', e);
+                }
+            };
+            reader.readAsText(file);
+        }
+
         function handleImportFile(input) {
             const file = input && input.files && input.files[0];
             if (file) {
                 importDataFromFile(file);
+            }
+            if (input) input.value = '';
+        }
+
+        function handleImportAllFile(input) {
+            const file = input && input.files && input.files[0];
+            if (file) {
+                importAllDataFromFile(file);
             }
             if (input) input.value = '';
         }
@@ -1352,9 +1525,40 @@
         }
 
         function deleteFront(frontId) {
-            if (confirm('Tem certeza que deseja deletar esta frente?')) {
+            const front = fronts.find(f => f.id === frontId);
+            if (!front) return;
+            
+            // Verificar se há OKRs relacionados
+            const relatedOKRs = getOKRsByFront(frontId);
+            let warningMessage = 'Tem certeza que deseja deletar esta frente?';
+            
+            if (relatedOKRs.length > 0) {
+                warningMessage = `Tem certeza que deseja deletar esta frente?\n\n⚠️ Atenção: Esta frente está relacionada a ${relatedOKRs.length} OKR(s). As relações serão removidas automaticamente.`;
+            }
+            
+            if (confirm(warningMessage)) {
+                // Remover a frente
                 fronts = fronts.filter(f => f.id !== frontId);
                 saveFronts();
+                
+                // Remover relações nos OKRs
+                okrs.forEach(okr => {
+                    okr.krs.forEach(kr => {
+                        if (kr.relatedFronts && kr.relatedFronts.includes(frontId)) {
+                            kr.relatedFronts = kr.relatedFronts.filter(id => id !== frontId);
+                        }
+                    });
+                });
+                saveOKRs();
+                
+                // Fechar modal de detalhes se estiver aberto
+                if (selectedFrontId === frontId) {
+                    selectedFrontId = null;
+                }
+                if (editingFrontId === frontId) {
+                    editingFrontId = null;
+                }
+                
                 render();
             }
         }
@@ -1567,6 +1771,17 @@
                                 </button>
                                 <button onclick="navigateTo('journeys')" class="px-3 py-2 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para Maturidade de Jornadas">
                                     <i class="fas fa-route mr-1" aria-hidden="true"></i> Jornadas
+                                </button>
+                                <button onclick="navigateTo('executivo')" class="px-3 py-2 bg-teal-500 hover:bg-teal-600 text-white font-semibold rounded transition-colors text-sm" aria-label="Ir para Painel Executivo">
+                                    <i class="fas fa-tv mr-1" aria-hidden="true"></i> Painel Executivo
+                                </button>
+                                <div class="h-6 w-px bg-slate-300 mx-1"></div>
+                                <input id="import-input-all" type="file" accept="application/json" class="hidden" onchange="handleImportAllFile(this)" aria-label="Selecionar arquivo de backup completo">
+                                <button onclick="exportAllData()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded transition-colors text-sm" aria-label="Exportar backup completo de todos os dados">
+                                    <i class="fas fa-download mr-1" aria-hidden="true"></i> Backup
+                                </button>
+                                <button onclick="document.getElementById('import-input-all').click()" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded transition-colors text-sm" aria-label="Importar backup completo">
+                                    <i class="fas fa-upload mr-1" aria-hidden="true"></i> Restaurar
                                 </button>
                             </nav>
                         </div>
@@ -1825,7 +2040,7 @@
                     <!-- Acesso Rápido -->
                     <section aria-labelledby="quick-access-section">
                         <h2 id="quick-access-section" class="text-2xl font-bold text-slate-900 mb-4">Acesso Rápido</h2>
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                             <button onclick="navigateTo('okrs'); if(okrs.length === 0) { creatingNewOKR = true; render(); }" class="bg-white rounded-lg shadow-md p-6 border-2 border-blue-200 hover:border-blue-400 transition-colors text-left group">
                                 <div class="flex items-center justify-between mb-3">
                                     <i class="fas fa-bullseye text-blue-500 text-2xl" aria-hidden="true"></i>
@@ -1857,6 +2072,14 @@
                                 </div>
                                 <h3 class="font-bold text-slate-900 mb-1">Maturidade das Jornadas</h3>
                                 <p class="text-sm text-slate-600">Avalie maturidade por pilares e jornadas</p>
+                            </button>
+                            <button onclick="navigateTo('executivo')" class="bg-white rounded-lg shadow-md p-6 border-2 border-teal-200 hover:border-teal-400 transition-colors text-left group">
+                                <div class="flex items-center justify-between mb-3">
+                                    <i class="fas fa-tv text-teal-500 text-2xl" aria-hidden="true"></i>
+                                    <i class="fas fa-arrow-right text-teal-500 group-hover:translate-x-1 transition-transform" aria-hidden="true"></i>
+                                </div>
+                                <h3 class="font-bold text-slate-900 mb-1">Painel Executivo</h3>
+                                <p class="text-sm text-slate-600">Carrossel de apresentação por Squads</p>
                             </button>
                         </div>
                     </section>
@@ -1984,9 +2207,14 @@
                                                     <p class="text-xs text-slate-600">${front.ownerName}</p>
                                                 </div>
                                             </div>
-                                            <button onclick="openEditFront('${front.id}')" class="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-600 hover:text-blue-600" aria-label="Editar frente ${front.name}">
-                                                <i class="fas fa-edit" aria-hidden="true"></i>
-                                            </button>
+                                            <div class="flex items-center gap-1">
+                                                <button onclick="openEditFront('${front.id}')" class="p-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-600 hover:text-blue-600" aria-label="Editar frente ${front.name}">
+                                                    <i class="fas fa-edit" aria-hidden="true"></i>
+                                                </button>
+                                                <button onclick="deleteFront('${front.id}')" class="p-2 hover:bg-red-50 rounded-lg transition-colors text-slate-600 hover:text-red-600" aria-label="Deletar frente ${front.name}">
+                                                    <i class="fas fa-trash" aria-hidden="true"></i>
+                                                </button>
+                                            </div>
                                         </div>
 
                                         <div class="flex items-center gap-2 mb-4">
@@ -2696,7 +2924,7 @@
                         baseline,
                         target,
                         realizado: existingKr ? (existingKr.realizado || 0) : 0,
-                        varMoM: existingKr ? (existingKr.varMoM || 0) : 0,
+                        varMoM: existingKr ? parseFloat(existingKr.varMoM || 0) : 0,
                         indicatorPath: indicatorPath || null,
                         relatedFronts: existingKr ? (existingKr.relatedFronts || []) : [],
                         createdAt: existingKr ? existingKr.createdAt : new Date().toISOString()
@@ -2956,7 +3184,7 @@
                                                             </div>
                                                             <div class="text-right ml-4">
                                                                 <div class="text-lg font-bold text-slate-900">${kr.realizado || 0} ${kr.unit}</div>
-                                                                <div class="text-xs text-slate-600">Var. MoM: ${(kr.varMoM || 0).toFixed(2)}%</div>
+                                                                <div class="text-xs text-slate-600">Var. MoM: ${parseFloat(kr.varMoM || 0).toFixed(2)}%</div>
                                                             </div>
                                                         </div>
                                                         <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
@@ -3234,7 +3462,7 @@
                                 ? indicators[pilar][indicador][prevMonthKey] : kr.baseline;
                             
                             if (prevValue !== 0) {
-                                kr.varMoM = parseFloat(((value - prevValue) / prevValue) * 100).toFixed(2);
+                                kr.varMoM = parseFloat(((value - prevValue) / prevValue) * 100);
                             } else {
                                 kr.varMoM = 0;
                             }
@@ -3261,7 +3489,7 @@
                             ? indicators[pilar][indicador][prevMonthKey] : kr.baseline;
                         
                         if (prevValue !== 0) {
-                            kr.varMoM = ((value - prevValue) / prevValue) * 100;
+                            kr.varMoM = parseFloat(((value - prevValue) / prevValue) * 100);
                         } else {
                             kr.varMoM = 0;
                         }
@@ -3281,79 +3509,72 @@
                     const text = e.target.result;
                     const lines = text.split('\n').filter(line => line.trim());
                     
-                    if (lines.length < 2) {
-                        alert('Arquivo vazio ou inválido. O arquivo deve conter pelo menos o cabeçalho e uma linha de dados.');
+                    if (lines.length < 1) {
+                        alert('Arquivo vazio ou inválido. O arquivo deve conter pelo menos uma linha de dados.');
                         return;
                     }
 
-                    // Parse do CSV (simplificado - assume que está separado por vírgula e com aspas opcionais)
-                    const headers = parseCSVLine(lines[0]);
-                    const dataLines = lines.slice(1);
-
-                    // Mapear índices das colunas esperadas
-                    const columnMap = {};
-                    headers.forEach((header, index) => {
-                        const normalizedHeader = header.trim().toLowerCase();
-                        if (normalizedHeader.includes('id') && (normalizedHeader.includes('planner') || normalizedHeader.includes('task'))) {
-                            columnMap.plannerId = index;
-                        } else if (normalizedHeader.includes('nome') && normalizedHeader.includes('tarefa')) {
-                            columnMap.taskName = index;
-                        } else if (normalizedHeader.includes('bucket') || (normalizedHeader.includes('jornada'))) {
-                            columnMap.bucket = index;
-                        } else if (normalizedHeader.includes('progresso')) {
-                            columnMap.progress = index;
-                        } else if (normalizedHeader.includes('prioridade') || normalizedHeader.includes('priority')) {
-                            columnMap.priority = index;
-                        } else if (normalizedHeader.includes('atribuído') || normalizedHeader.includes('assigned')) {
-                            columnMap.assignedTo = index;
-                        } else if (normalizedHeader.includes('criado por') || normalizedHeader.includes('created by')) {
-                            columnMap.createdBy = index;
-                        } else if (normalizedHeader.includes('criado em') || normalizedHeader.includes('created at')) {
-                            columnMap.createdAt = index;
-                        } else if (normalizedHeader.includes('data de início') || normalizedHeader.includes('start date')) {
-                            columnMap.startDate = index;
-                        } else if (normalizedHeader.includes('data de conclusão') || normalizedHeader.includes('due date') || normalizedHeader.includes('data de concluir')) {
-                            columnMap.dueDate = index;
-                        } else if (normalizedHeader.includes('recorrente') || normalizedHeader.includes('recurring')) {
-                            columnMap.isRecurring = index;
-                        } else if (normalizedHeader.includes('atrasado') || normalizedHeader.includes('overdue')) {
-                            columnMap.isOverdue = index;
-                        } else if (normalizedHeader.includes('concluído em') || normalizedHeader.includes('completed at')) {
-                            columnMap.completedAt = index;
-                        } else if (normalizedHeader.includes('concluído por') || normalizedHeader.includes('completed by')) {
-                            columnMap.completedBy = index;
-                        } else if (normalizedHeader.includes('checklist') || normalizedHeader.includes('lista de verificação')) {
-                            columnMap.checklist = index;
-                        } else if (normalizedHeader.includes('rótulo') || normalizedHeader.includes('label')) {
-                            columnMap.labels = index;
-                        } else if (normalizedHeader.includes('descrição') || normalizedHeader.includes('description')) {
-                            columnMap.description = index;
-                        } else if (normalizedHeader.includes('concluído') && !normalizedHeader.includes('em') && !normalizedHeader.includes('por') || normalizedHeader.includes('completed')) {
-                            columnMap.isCompleted = index;
+                    // Parse do CSV - usar ordem das colunas ao invés dos nomes
+                    // A primeira linha pode ser cabeçalho ou dados - vamos detectar automaticamente
+                    let startIndex = 0;
+                    
+                    // Verificar se a primeira linha parece ser cabeçalho
+                    if (lines.length > 0) {
+                        const firstLineValues = parseCSVLine(lines[0]);
+                        // Se a primeira linha contém palavras típicas de cabeçalho, pular ela
+                        if (firstLineValues.length > 0) {
+                            const firstCell = firstLineValues[0].trim().toLowerCase();
+                            if (firstCell.includes('id') || firstCell.includes('nome') || firstCell.includes('tarefa') || 
+                                firstCell.includes('bucket') || firstCell.includes('jornada') || firstCell.includes('progresso')) {
+                                // Parece ser cabeçalho, pular primeira linha
+                                startIndex = 1;
+                            }
                         }
-                    });
-
-                    // Validar campos obrigatórios
-                    if (columnMap.plannerId === undefined || columnMap.taskName === undefined || columnMap.bucket === undefined) {
-                        alert('Arquivo inválido! O arquivo deve conter as colunas: ID do Planner, Nome da Tarefa e Bucket (Jornada).');
+                    }
+                    
+                    const linesToProcess = lines.slice(startIndex);
+                    
+                    // Ordem fixa das colunas (baseada na ordem original solicitada):
+                    // 0: ID do Planner/Task
+                    // 1: Nome da Tarefa
+                    // 2: Bucket/Jornada
+                    // 3: Progresso
+                    // 4: Prioridade
+                    // 5: Atribuído
+                    // 6: Criado por
+                    // 7: Criado em
+                    // 8: Data de início
+                    // 9: Data de conclusão
+                    // 10: Recorrente
+                    // 11: Atrasado
+                    // 12: Concluído
+                    // 13: Concluído em
+                    // 14: Concluído por
+                    // 15: Checklist
+                    // 16: Rótulos/Labels
+                    // 17: Descrição
+                    
+                    if (linesToProcess.length === 0) {
+                        alert('Arquivo vazio ou inválido. O arquivo deve conter pelo menos uma linha de dados.');
                         return;
                     }
 
                     let importedCount = 0;
                     let errors = [];
 
-                    dataLines.forEach((line, lineIndex) => {
+                    linesToProcess.forEach((line, lineIndex) => {
                         if (!line.trim()) return;
                         
                         try {
                             const values = parseCSVLine(line);
                             
-                            const plannerId = values[columnMap.plannerId]?.trim();
-                            const taskName = values[columnMap.taskName]?.trim();
-                            const bucketName = values[columnMap.bucket]?.trim();
+                            // Usar ordem fixa das colunas (índices fixos) ao invés de nomes
+                            const plannerId = values[0]?.trim() || '';
+                            const taskName = values[1]?.trim() || '';
+                            const bucketName = values[2]?.trim() || '';
 
                             if (!plannerId || !taskName || !bucketName) {
-                                errors.push(`Linha ${lineIndex + 2}: Campos obrigatórios ausentes`);
+                                errors.push(`Linha ${startIndex + lineIndex + 1}: Campos obrigatórios ausentes (ID, Nome da Tarefa e Bucket)`);
                                 return;
                             }
 
@@ -3364,7 +3585,7 @@
                             );
 
                             if (!journey) {
-                                errors.push(`Linha ${lineIndex + 2}: Jornada "${bucketName}" não encontrada`);
+                                errors.push(`Linha ${startIndex + lineIndex + 1}: Jornada "${bucketName}" não encontrada`);
                                 return;
                             }
 
@@ -3373,34 +3594,34 @@
                                 journey.events = [];
                             }
 
-                            // Criar objeto de risco
+                            // Criar objeto de risco usando ordem fixa das colunas
                             const newRisk = {
                                 id: 'risk' + Date.now() + lineIndex,
                                 category: 'Riscos',
                                 plannerId: plannerId,
                                 taskName: taskName,
                                 bucket: journey.id,
-                                progress: parseInt(values[columnMap.progress]) || 0,
-                                priority: values[columnMap.priority]?.trim() || '',
-                                assignedTo: values[columnMap.assignedTo]?.trim() || '',
-                                createdBy: values[columnMap.createdBy]?.trim() || '',
-                                createdAt: values[columnMap.createdAt]?.trim() || '',
-                                startDate: values[columnMap.startDate]?.trim() || '',
-                                dueDate: values[columnMap.dueDate]?.trim() || '',
-                                isRecurring: values[columnMap.isRecurring]?.trim().toLowerCase() === 'true' || values[columnMap.isRecurring]?.trim().toLowerCase() === 'sim',
-                                isOverdue: values[columnMap.isOverdue]?.trim().toLowerCase() === 'true' || values[columnMap.isOverdue]?.trim().toLowerCase() === 'sim',
-                                isCompleted: values[columnMap.isCompleted]?.trim().toLowerCase() === 'true' || values[columnMap.isCompleted]?.trim().toLowerCase() === 'sim',
-                                completedAt: values[columnMap.completedAt]?.trim() || '',
-                                completedBy: values[columnMap.completedBy]?.trim() || '',
-                                checklist: values[columnMap.checklist]?.trim() || '',
-                                labels: values[columnMap.labels]?.trim() || '',
-                                description: values[columnMap.description]?.trim() || ''
+                                progress: parseInt(values[3]) || 0,
+                                priority: values[4]?.trim() || '',
+                                assignedTo: values[5]?.trim() || '',
+                                createdBy: values[6]?.trim() || '',
+                                createdAt: values[7]?.trim() || '',
+                                startDate: values[8]?.trim() || '',
+                                dueDate: values[9]?.trim() || '',
+                                isRecurring: (values[10]?.trim().toLowerCase() === 'true' || values[10]?.trim().toLowerCase() === 'sim' || values[10]?.trim() === '1'),
+                                isOverdue: (values[11]?.trim().toLowerCase() === 'true' || values[11]?.trim().toLowerCase() === 'sim' || values[11]?.trim() === '1'),
+                                isCompleted: (values[12]?.trim().toLowerCase() === 'true' || values[12]?.trim().toLowerCase() === 'sim' || values[12]?.trim() === '1'),
+                                completedAt: values[13]?.trim() || '',
+                                completedBy: values[14]?.trim() || '',
+                                checklist: values[15]?.trim() || '',
+                                labels: values[16]?.trim() || '',
+                                description: values[17]?.trim() || ''
                             };
 
                             journey.events.push(newRisk);
                             importedCount++;
                         } catch (err) {
-                            errors.push(`Linha ${lineIndex + 2}: ${err.message}`);
+                            errors.push(`Linha ${startIndex + lineIndex + 1}: ${err.message}`);
                         }
                     });
 
@@ -3508,6 +3729,40 @@
                 });
             }
             return history;
+        }
+
+        function getIndicatorYearSeries(pilar, indicador, year) {
+            if (!indicators[pilar] || !indicators[pilar][indicador]) return [];
+            const series = [];
+            for (let m = 1; m <= 12; m++) {
+                const monthYearKey = `${year}-${String(m).padStart(2, '0')}`;
+                const value = parseFloat(indicators[pilar][indicador][monthYearKey] || 0) || 0;
+                series.push({
+                    month: m,
+                    year,
+                    value,
+                    label: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][m - 1]
+                });
+            }
+            return series;
+        }
+
+        function renderAnnualSparkline(history) {
+            if (!history || history.length === 0) return '<p class="text-xs text-slate-400 italic">Sem dados</p>';
+            const max = Math.max(...history.map(h => h.value), 1);
+            const chartHeight = 50;
+            const chartWidth = 12 * 16;
+            const padding = { top: 6, right: 6, bottom: 6, left: 6 };
+            const points = history.map((h, i) => {
+                const x = padding.left + (i / 11) * (chartWidth - padding.left - padding.right);
+                const y = chartHeight - padding.bottom - (h.value / max) * (chartHeight - padding.top - padding.bottom);
+                return `${x},${y}`;
+            }).join(' ');
+            return `
+                <svg width="${chartWidth}" height="${chartHeight}" class="w-full" style="max-width: 100%; height: auto;">
+                    <polyline points="${points}" fill="none" stroke="#475569" stroke-width="2"/>
+                </svg>
+            `;
         }
 
         function calculateIndicatorInsights() {
@@ -3761,6 +4016,91 @@
                                     </section>
                                 ` : ''}
                             </div>
+                        `;
+                    })()}
+
+                    <!-- Visão Anual Consolidada -->
+                    ${(() => {
+                        const scopeAllPillars = selectedIndicatorPillar === null;
+                        const selectedPilar = selectedIndicatorPillar;
+                        const targetYear = selectedIndicatorYear;
+                        const dataset = [];
+                        Object.entries(indicators).forEach(([pilar, indicadores]) => {
+                            if (pilar === 'defaultIndicators') return;
+                            if (!scopeAllPillars && pilar !== selectedPilar) return;
+                            if (typeof indicadores === 'object' && indicadores !== null) {
+                                Object.keys(indicadores).forEach(indicador => {
+                                    const series = getIndicatorYearSeries(pilar, indicador, targetYear);
+                                    if (series.length === 12) {
+                                        const values = series.map(s => s.value);
+                                        const total = values.reduce((a, b) => a + b, 0);
+                                        const avg = total / 12;
+                                        const maxVal = Math.max(...values);
+                                        const maxIdx = values.indexOf(maxVal);
+                                        dataset.push({ pilar, indicador, total, avg, maxVal, maxMonthLabel: series[maxIdx].label, series });
+                                    }
+                                });
+                            }
+                        });
+
+                        if (dataset.length === 0) {
+                            return '';
+                        }
+
+                        const ranked = [...dataset].sort((a, b) => b.total - a.total);
+                        const top5 = ranked.slice(0, 5);
+
+                        return `
+                            <section class="mt-8">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div class="flex items-center gap-3">
+                                        <i class="fas fa-calendar text-slate-600 text-xl"></i>
+                                        <h2 class="text-xl font-bold text-slate-900">Visão Anual Consolidada (${targetYear}) ${scopeAllPillars ? '' : `• ${selectedPilar}`}</h2>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+                                    ${top5.map(item => `
+                                        <div class="bg-white border-2 border-red-200 rounded-lg p-4 shadow-sm">
+                                            <div class="text-xs text-slate-600 mb-1">${item.pilar}</div>
+                                            <div class="font-semibold text-slate-900 mb-2" title="${item.indicador}">${item.indicador}</div>
+                                            <div class="text-2xl font-bold text-red-600">${Math.round(item.total)}</div>
+                                            <div class="text-xs text-slate-500">Pico: ${item.maxVal} em ${item.maxMonthLabel}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+
+                                <div class="bg-white rounded-lg shadow-md border-2 border-slate-200 p-4 overflow-x-auto">
+                                    <table class="w-full text-sm">
+                                        <thead>
+                                            <tr class="border-b border-slate-200">
+                                                <th class="text-left py-3 px-4 font-semibold text-slate-700">Pilar</th>
+                                                <th class="text-left py-3 px-4 font-semibold text-slate-700">Indicador</th>
+                                                <th class="text-right py-3 px-4 font-semibold text-slate-700">Total (${targetYear})</th>
+                                                <th class="text-right py-3 px-4 font-semibold text-slate-700">Média Mensal</th>
+                                                <th class="text-center py-3 px-4 font-semibold text-slate-700">Evolução (12 meses)</th>
+                                                <th class="text-right py-3 px-4 font-semibold text-slate-700">Pico</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${ranked.map(item => `
+                                                <tr class="border-b border-slate-100 hover:bg-slate-50">
+                                                    <td class="py-3 px-4 text-slate-800">${item.pilar}</td>
+                                                    <td class="py-3 px-4 text-slate-800">${item.indicador}</td>
+                                                    <td class="py-3 px-4 text-right font-semibold text-slate-900">${item.total.toFixed(0)}</td>
+                                                    <td class="py-3 px-4 text-right text-slate-800">${item.avg.toFixed(1)}</td>
+                                                    <td class="py-3 px-4">
+                                                        <div style="width: 100%; max-width: 260px; margin: 0 auto;">
+                                                            ${renderAnnualSparkline(item.series)}
+                                                        </div>
+                                                    </td>
+                                                    <td class="py-3 px-4 text-right text-slate-800">${item.maxVal} (${item.maxMonthLabel})</td>
+                                                </tr>
+                                            `).join('')}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </section>
                         `;
                     })()}
 
@@ -5198,6 +5538,1107 @@
             `;
         }
 
+        // ========== PÁGINA PAINEL EXECUTIVO ==========
+        
+        function renderExecutivoPanelPage() {
+            // Se não há coleção selecionada, mostrar lista de coleções
+            if (selectedExecutivoCollectionId === null) {
+                return renderExecutivoCollectionsList();
+            }
+
+            // Obter painéis da coleção selecionada
+            const collectionPanels = executivoPanels.filter(p => p.collectionId === selectedExecutivoCollectionId);
+            
+            // Buscar a coleção atual (definir antes de usar em ambos os blocos)
+            const collection = executivoCollections.find(c => c.id === selectedExecutivoCollectionId);
+            
+            if (collectionPanels.length === 0) {
+                return `
+                    <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
+                        <div class="max-w-7xl mx-auto px-6 py-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <button onclick="selectedExecutivoCollectionId = null; currentExecutivoPanelIndex = 0; render();" class="text-teal-600 hover:text-teal-700 mb-2 flex items-center gap-2">
+                                        <i class="fas fa-arrow-left"></i> Voltar para Coleções
+                                    </button>
+                                    <h1 class="text-3xl font-bold text-slate-900">${collection?.name || 'Coleção'}</h1>
+                                    <p class="text-slate-600 mt-1 text-sm">Nenhum painel cadastrado nesta coleção</p>
+                                </div>
+                                <nav class="flex items-center gap-2">
+                                    <button onclick="navigateTo('dashboard')" class="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded transition-colors text-sm">
+                                        <i class="fas fa-home mr-1"></i> Dashboard
+                                    </button>
+                                    <button onclick="creatingNewExecutivoPanel = true; render();" class="px-3 py-2 bg-teal-500 hover:bg-teal-600 text-white font-semibold rounded transition-colors text-sm">
+                                        <i class="fas fa-plus mr-1"></i> Novo Painel
+                                    </button>
+                                </nav>
+                            </div>
+                        </div>
+                    </header>
+                    <main class="max-w-7xl mx-auto px-6 py-8">
+                        <div class="bg-white rounded-lg shadow-md p-12 text-center border-2 border-teal-200">
+                            <i class="fas fa-tv text-6xl text-teal-400 mb-4"></i>
+                            <h2 class="text-2xl font-bold text-slate-900 mb-2">Nenhum Painel Cadastrado</h2>
+                            <p class="text-slate-600 mb-6">Comece criando seu primeiro painel executivo para uma Squad nesta coleção.</p>
+                            <button onclick="creatingNewExecutivoPanel = true; render();" class="px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white font-semibold rounded-lg transition-colors">
+                                <i class="fas fa-plus mr-2"></i> Criar Primeiro Painel
+                            </button>
+                        </div>
+                    </main>
+                    ${creatingNewExecutivoCollection ? renderNewExecutivoCollectionModal() : ''}
+                    ${creatingNewExecutivoPanel ? renderNewExecutivoPanelModal() : ''}
+                `;
+            }
+
+            // Ajustar índice se necessário
+            if (currentExecutivoPanelIndex >= collectionPanels.length) {
+                currentExecutivoPanelIndex = 0;
+            }
+
+            const currentPanel = collectionPanels[currentExecutivoPanelIndex] || collectionPanels[0];
+            
+            return `
+                ${creatingNewExecutivoPanel ? renderNewExecutivoPanelModal() : ''}
+                ${editingExecutivoPanelId ? renderEditExecutivoPanelModal() : ''}
+                <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
+                    <div class="max-w-7xl mx-auto px-6 py-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <button onclick="selectedExecutivoCollectionId = null; currentExecutivoPanelIndex = 0; render();" class="text-teal-600 hover:text-teal-700 mb-2 flex items-center gap-2">
+                                    <i class="fas fa-arrow-left"></i> Voltar para Coleções
+                                </button>
+                                <h1 class="text-3xl font-bold text-slate-900">${collection?.name || 'Coleção'}</h1>
+                                <p class="text-slate-600 mt-1 text-sm">${currentPanel?.squadName || 'Carrossel de Squads'}</p>
+                            </div>
+                            <nav class="flex items-center gap-2">
+                                <button onclick="navigateTo('dashboard')" class="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded transition-colors text-sm">
+                                    <i class="fas fa-home mr-1"></i> Dashboard
+                                </button>
+                                <button onclick="creatingNewExecutivoPanel = true; render();" class="px-3 py-2 bg-teal-500 hover:bg-teal-600 text-white font-semibold rounded transition-colors text-sm">
+                                    <i class="fas fa-plus mr-1"></i> Novo Painel
+                                </button>
+                            </nav>
+                        </div>
+                    </div>
+                </header>
+                <main class="max-w-7xl mx-auto px-6 py-8">
+                    <div class="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-2xl p-8 text-white">
+                        <!-- Controles do Carrossel -->
+                        <div class="flex items-center justify-between mb-6">
+                            <button onclick="previousExecutivoPanel()" class="p-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors" ${collectionPanels.length <= 1 ? 'disabled' : ''}>
+                                <i class="fas fa-chevron-left text-2xl"></i>
+                            </button>
+                            <div class="text-center">
+                                <div class="text-sm text-slate-300 mb-1">Painel ${currentExecutivoPanelIndex + 1} de ${collectionPanels.length}</div>
+                                <div class="flex gap-1 justify-center">
+                                    ${collectionPanels.map((_, idx) => `
+                                        <div class="w-2 h-2 rounded-full ${idx === currentExecutivoPanelIndex ? 'bg-white' : 'bg-white/30'}" onclick="currentExecutivoPanelIndex = ${idx}; render();"></div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                            <button onclick="nextExecutivoPanel()" class="p-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors" ${collectionPanels.length <= 1 ? 'disabled' : ''}>
+                                <i class="fas fa-chevron-right text-2xl"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="flex-1 flex items-center justify-center min-h-0">
+                            ${currentPanel ? renderExecutivoPanelCard(currentPanel) : ''}
+                        </div>
+                    </div>
+                </main>
+            `;
+        }
+
+        function previousExecutivoPanel() {
+            if (!selectedExecutivoCollectionId) return;
+            const collectionPanels = executivoPanels.filter(p => p.collectionId === selectedExecutivoCollectionId);
+            if (collectionPanels.length === 0) return;
+            currentExecutivoPanelIndex = (currentExecutivoPanelIndex - 1 + collectionPanels.length) % collectionPanels.length;
+            render();
+        }
+
+        function nextExecutivoPanel() {
+            if (!selectedExecutivoCollectionId) return;
+            const collectionPanels = executivoPanels.filter(p => p.collectionId === selectedExecutivoCollectionId);
+            if (collectionPanels.length === 0) return;
+            currentExecutivoPanelIndex = (currentExecutivoPanelIndex + 1) % collectionPanels.length;
+            render();
+        }
+
+        function renderExecutivoCollectionsList() {
+            return `
+                ${creatingNewExecutivoCollection ? renderNewExecutivoCollectionModal() : ''}
+                ${editingExecutivoCollectionId ? renderEditExecutivoCollectionModal() : ''}
+                <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
+                    <div class="max-w-7xl mx-auto px-6 py-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h1 class="text-3xl font-bold text-slate-900">Painel Executivo</h1>
+                                <p class="text-slate-600 mt-1 text-sm">Gerencie suas coleções de painéis por período (ex: 2025, 2026)</p>
+                            </div>
+                            <nav class="flex items-center gap-2">
+                                <button onclick="navigateTo('dashboard')" class="px-3 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded transition-colors text-sm">
+                                    <i class="fas fa-home mr-1"></i> Dashboard
+                                </button>
+                                <button onclick="creatingNewExecutivoCollection = true; render();" class="px-3 py-2 bg-teal-500 hover:bg-teal-600 text-white font-semibold rounded transition-colors text-sm">
+                                    <i class="fas fa-plus mr-1"></i> Nova Coleção
+                                </button>
+                            </nav>
+                        </div>
+                    </div>
+                </header>
+                <main class="max-w-7xl mx-auto px-6 py-8">
+                    ${executivoCollections.length === 0 ? `
+                        <div class="bg-white rounded-lg shadow-md p-12 text-center border-2 border-teal-200">
+                            <i class="fas fa-folder-open text-6xl text-teal-400 mb-4"></i>
+                            <h2 class="text-2xl font-bold text-slate-900 mb-2">Nenhuma Coleção Cadastrada</h2>
+                            <p class="text-slate-600 mb-6">Crie uma coleção para organizar seus painéis por período (ex: 2025, 2026).</p>
+                            <button onclick="creatingNewExecutivoCollection = true; render();" class="px-6 py-3 bg-teal-500 hover:bg-teal-600 text-white font-semibold rounded-lg transition-colors">
+                                <i class="fas fa-plus mr-2"></i> Criar Primeira Coleção
+                            </button>
+                        </div>
+                    ` : `
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            ${executivoCollections.map(collection => {
+                                const panelsCount = executivoPanels.filter(p => p.collectionId === collection.id).length;
+                                return `
+                                    <div class="bg-white rounded-lg shadow-md hover:shadow-xl transition-shadow border-2 border-slate-200 hover:border-teal-400 p-6 cursor-pointer group" onclick="openExecutivoCollection('${collection.id}')">
+                                        <div class="flex items-start justify-between mb-4">
+                                            <div class="flex-1">
+                                                <h3 class="text-2xl font-bold text-slate-900 mb-2">${collection.name}</h3>
+                                                ${collection.description ? `<p class="text-slate-600 text-sm">${collection.description}</p>` : ''}
+                                            </div>
+                                            <div class="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onclick="event.stopPropagation(); editingExecutivoCollectionId = '${collection.id}'; render();" class="p-2 hover:bg-blue-50 rounded-lg text-blue-600">
+                                                    <i class="fas fa-edit"></i>
+                                                </button>
+                                                <button onclick="event.stopPropagation(); deleteExecutivoCollection('${collection.id}');" class="p-2 hover:bg-red-50 rounded-lg text-red-600">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-4 text-sm text-slate-600">
+                                            <span class="flex items-center gap-2">
+                                                <i class="fas fa-tv text-teal-500"></i>
+                                                ${panelsCount} painel${panelsCount !== 1 ? 'éis' : ''}
+                                            </span>
+                                        </div>
+                                        <div class="mt-4 pt-4 border-t border-slate-200">
+                                            <button class="w-full px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white font-semibold rounded transition-colors text-sm">
+                                                Abrir Coleção
+                                                <i class="fas fa-arrow-right ml-2"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `}
+                </main>
+            `;
+        }
+
+        function openExecutivoCollection(collectionId) {
+            selectedExecutivoCollectionId = collectionId;
+            currentExecutivoPanelIndex = 0;
+            render();
+        }
+
+        function renderNewExecutivoCollectionModal() {
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) { creatingNewExecutivoCollection = false; render(); }">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-md w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                        <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
+                            <h2 class="text-2xl font-bold text-slate-900">Nova Coleção</h2>
+                            <button onclick="creatingNewExecutivoCollection = false; render();" class="p-2 hover:bg-slate-100 rounded-lg">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Nome da Coleção *</label>
+                                <input type="text" id="new-collection-name" placeholder="Ex: Painéis 2025" class="w-full" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Descrição (opcional)</label>
+                                <textarea id="new-collection-description" placeholder="Ex: Painéis executivos do ano de 2025" class="w-full" rows="3"></textarea>
+                            </div>
+                            <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                <button onclick="saveNewExecutivoCollection()" class="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-save mr-2"></i> Salvar
+                                </button>
+                                <button onclick="creatingNewExecutivoCollection = false; render();" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderEditExecutivoCollectionModal() {
+            const collection = executivoCollections.find(c => c.id === editingExecutivoCollectionId);
+            if (!collection) return '';
+            
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) { editingExecutivoCollectionId = null; render(); }">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-md w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                        <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
+                            <h2 class="text-2xl font-bold text-slate-900">Editar Coleção</h2>
+                            <button onclick="editingExecutivoCollectionId = null; render();" class="p-2 hover:bg-slate-100 rounded-lg">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Nome da Coleção *</label>
+                                <input type="text" id="edit-collection-name" value="${collection.name}" placeholder="Ex: Painéis 2025" class="w-full" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Descrição (opcional)</label>
+                                <textarea id="edit-collection-description" placeholder="Ex: Painéis executivos do ano de 2025" class="w-full" rows="3">${collection.description || ''}</textarea>
+                            </div>
+                            <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                <button onclick="saveEditExecutivoCollection()" class="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-save mr-2"></i> Salvar
+                                </button>
+                                <button onclick="editingExecutivoCollectionId = null; render();" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
+                                    Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function saveNewExecutivoCollection() {
+            const name = document.getElementById('new-collection-name').value.trim();
+            if (!name) {
+                alert('Por favor, informe o nome da coleção.');
+                return;
+            }
+
+            const collection = {
+                id: 'collection_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                name: name,
+                description: document.getElementById('new-collection-description').value.trim(),
+                createdAt: Date.now()
+            };
+
+            executivoCollections.push(collection);
+            saveExecutivoCollections();
+            creatingNewExecutivoCollection = false;
+            render();
+        }
+
+        function saveEditExecutivoCollection() {
+            const collection = executivoCollections.find(c => c.id === editingExecutivoCollectionId);
+            if (!collection) return;
+
+            const name = document.getElementById('edit-collection-name').value.trim();
+            if (!name) {
+                alert('Por favor, informe o nome da coleção.');
+                return;
+            }
+
+            collection.name = name;
+            collection.description = document.getElementById('edit-collection-description').value.trim();
+            collection.updatedAt = Date.now();
+
+            saveExecutivoCollections();
+            editingExecutivoCollectionId = null;
+            render();
+        }
+
+        function deleteExecutivoCollection(collectionId) {
+            if (!confirm('Tem certeza que deseja excluir esta coleção? Os painéis associados também serão removidos.')) return;
+
+            // Remover painéis da coleção
+            executivoPanels = executivoPanels.filter(p => p.collectionId !== collectionId);
+            saveExecutivoPanels();
+
+            // Remover coleção
+            executivoCollections = executivoCollections.filter(c => c.id !== collectionId);
+            saveExecutivoCollections();
+
+            // Se estava visualizando esta coleção, voltar para lista
+            if (selectedExecutivoCollectionId === collectionId) {
+                selectedExecutivoCollectionId = null;
+                currentExecutivoPanelIndex = 0;
+            }
+
+            render();
+        }
+
+        function renderExecutivoPanelCard(panel) {
+            const statusColors = {
+                'not-started': { border: 'border-slate-500', bg: 'bg-slate-500', text: 'text-white', label: 'Não Iniciado' },
+                'delivered': { border: 'border-blue-500', bg: 'bg-blue-500', text: 'text-white', label: 'Entregue' },
+                'in-progress': { border: 'border-green-500', bg: 'bg-green-500', text: 'text-white', label: 'Em Andamento' },
+                'at-risk': { border: 'border-yellow-500', bg: 'bg-yellow-500', text: 'text-black', label: 'Em Risco' }
+            };
+
+            return `
+                <div class="bg-white rounded-lg shadow-xl p-8 text-slate-900 w-full max-w-full flex flex-col min-h-0">
+                    <!-- Header da Squad -->
+                    <div class="border-b-4 border-teal-500 pb-4 mb-6 group flex-shrink-0">
+                        <div class="flex items-center gap-4">
+                            ${panel.ownerAvatar ? `
+                                <img src="${panel.ownerAvatar}" alt="Owner" class="w-20 h-20 rounded-full object-cover border-4 border-teal-400 shadow-lg" onerror="this.style.display='none'">
+                            ` : `
+                                <div class="w-20 h-20 rounded-full bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center text-white text-2xl font-bold border-4 border-teal-400 shadow-lg">
+                                    ${(panel.squadName || 'S').charAt(0).toUpperCase()}
+                                </div>
+                            `}
+                            <div class="flex-1">
+                                <h2 class="text-4xl font-bold text-slate-900 mb-2">${panel.squadName || 'Squad não definida'}</h2>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4 mt-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                            <button onclick="editingExecutivoPanelId = '${panel.id}'; render();" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors text-sm">
+                                <i class="fas fa-edit mr-1"></i> Editar
+                            </button>
+                            <button onclick="deleteExecutivoPanel('${panel.id}')" class="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded transition-colors text-sm">
+                                <i class="fas fa-trash mr-1"></i> Excluir
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 flex-1 w-full">
+                        ${(panel.portais || []).length > 0 ? `
+                        <!-- Portais Responsáveis -->
+                        <div class="bg-slate-50 rounded-lg p-6 h-full flex flex-col">
+                            <h3 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                <i class="fas fa-globe text-teal-600"></i> Portais Responsáveis
+                            </h3>
+                            <div class="space-y-2">
+                                ${panel.portais.map(p => `
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-check-circle text-green-600"></i>
+                                        <span>${p}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${(panel.produtos || []).length > 0 ? `
+                        <!-- Produtos -->
+                        <div class="bg-slate-50 rounded-lg p-6 h-full flex flex-col">
+                            <h3 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                <i class="fas fa-box text-teal-600"></i> Produtos
+                            </h3>
+                            <div class="space-y-2">
+                                ${panel.produtos.map(p => `
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-check-circle text-green-600"></i>
+                                        <span>${p}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${(panel.seguros || []).length > 0 ? `
+                        <!-- Seguros -->
+                        <div class="bg-slate-50 rounded-lg p-6 h-full flex flex-col">
+                            <h3 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                <i class="fas fa-shield-alt text-teal-600"></i> Seguros
+                            </h3>
+                            <div class="space-y-2">
+                                ${panel.seguros.map(s => `
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-check-circle text-green-600"></i>
+                                        <span>${s}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${panel.tecnologias ? `
+                        <!-- Tecnologias -->
+                        <div class="bg-slate-50 rounded-lg p-6 h-full flex flex-col">
+                            <h3 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                <i class="fas fa-code text-teal-600"></i> Tecnologias
+                            </h3>
+                            <p class="text-slate-700">${panel.tecnologias}</p>
+                        </div>
+                        ` : ''}
+
+                        ${(panel.indicadores || []).length > 0 ? `
+                        <!-- Indicadores -->
+                        <div class="bg-slate-50 rounded-lg p-6 lg:col-span-2 h-full flex flex-col">
+                            <h3 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                <i class="fas fa-chart-bar text-teal-600"></i> Indicadores
+                            </h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                ${panel.indicadores.map(ind => `
+                                    <div class="bg-white rounded p-3 border border-slate-200">
+                                        <div class="flex items-center gap-2">
+                                            <i class="fas fa-check-circle text-green-600"></i>
+                                            <span class="font-semibold">${ind}</span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${(() => {
+                            const entregas = Array.isArray(panel.principaisEntregas) ? panel.principaisEntregas : [];
+                            return entregas.length > 0;
+                        })() ? `
+                        <!-- Principais Entregas -->
+                        <div class="bg-slate-50 rounded-lg p-6 lg:col-span-2 h-full flex flex-col">
+                            <h3 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                <i class="fas fa-flag-checkered text-teal-600"></i> Principais Entregas para o Ano
+                            </h3>
+                            <div class="space-y-3">
+                                ${(() => {
+                                    const entregas = Array.isArray(panel.principaisEntregas) ? panel.principaisEntregas : [];
+                                    return entregas.map(item => {
+                                        const descricao = typeof item === 'string' ? item : (item.descricao || '');
+                                        const status = typeof item === 'object' && item.status ? (statusColors[item.status] || statusColors['not-started']) : statusColors['not-started'];
+                                        
+                                        // Buscar informações do OKR/KR relacionado para tooltip
+                                        let okrKrIcon = '';
+                                        let okrKrTooltip = '';
+                                        if (typeof item === 'object' && item.okrId && item.krId) {
+                                            const okr = okrs.find(o => o.id === item.okrId);
+                                            if (okr) {
+                                                const kr = okr.krs ? okr.krs.find(k => k.id === item.krId) : null;
+                                                if (kr) {
+                                                    okrKrTooltip = `OKR: ${okr.objetivo}\\nKR: ${kr.description || 'KR sem descrição'}`;
+                                                    okrKrIcon = `
+                                                        <div class="relative inline-block group">
+                                                            <i class="fas fa-key text-yellow-500 text-lg cursor-help hover:text-yellow-600 transition-colors"></i>
+                                                            <div class="absolute left-full ml-2 top-1/2 -translate-y-1/2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 bg-slate-900 text-white text-xs rounded-lg py-2 px-3 z-50 shadow-xl min-w-[250px] pointer-events-none">
+                                                                <div class="font-semibold mb-1 text-yellow-300">Relacionado a OKR/KR:</div>
+                                                                <div class="text-xs space-y-1">
+                                                                    <div><span class="font-semibold">OKR:</span> ${okr.objetivo}</div>
+                                                                    <div><span class="font-semibold">KR:</span> ${kr.description || 'KR sem descrição'}</div>
+                                                                </div>
+                                                                <div class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900"></div>
+                                                            </div>
+                                                        </div>
+                                                    `;
+                                                }
+                                            }
+                                        }
+                                        
+                                        return `
+                                            <div class="bg-white rounded-lg p-4 border-l-4 ${status.border} shadow-sm">
+                                                <div class="flex items-start justify-between gap-3">
+                                                    <div class="flex-1 flex items-start gap-2">
+                                                        ${okrKrIcon}
+                                                        <p class="text-slate-700 flex-1">${descricao}</p>
+                                                    </div>
+                                                    <span class="px-3 py-1 rounded-full ${status.bg} ${status.text} text-xs font-semibold flex-shrink-0">
+                                                        ${status.label}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('');
+                                })()}
+                            </div>
+                        </div>
+                        ` : ''}
+
+                        ${(typeof panel.oQueFuncionaBem === 'string' && panel.oQueFuncionaBem.trim()) ? `
+                        <!-- O que funciona bem -->
+                        <div class="bg-green-50 rounded-lg p-6 lg:col-span-2 h-full flex flex-col border-2 border-green-200">
+                            <h3 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                <i class="fas fa-thumbs-up text-green-600"></i> O que funciona bem
+                            </h3>
+                            <p class="text-slate-700">${panel.oQueFuncionaBem}</p>
+                        </div>
+                        ` : ''}
+
+                        ${(panel.oportunidades || []).length > 0 ? `
+                        <!-- Oportunidades -->
+                        <div class="bg-red-50 rounded-lg p-6 lg:col-span-2 h-full flex flex-col border-2 border-red-200">
+                            <h3 class="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
+                                <i class="fas fa-lightbulb text-red-600"></i> Oportunidades
+                            </h3>
+                            <div class="space-y-3">
+                                ${panel.oportunidades.map(op => `
+                                    <div class="bg-white rounded p-4 border-l-4 border-red-400">
+                                        <p class="text-slate-700">${op}</p>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderNewExecutivoPanelModal() {
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) { creatingNewExecutivoPanel = false; render(); }">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-5xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                        <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
+                            <h2 class="text-2xl font-bold text-slate-900">Novo Painel Executivo</h2>
+                            <button onclick="creatingNewExecutivoPanel = false; render();" class="p-2 hover:bg-slate-100 rounded-lg">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+                        <div class="p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
+                            ${renderExecutivoPanelForm()}
+                            <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                <button onclick="saveNewExecutivoPanel()" class="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-save mr-2"></i> Salvar Painel
+                                </button>
+                                <button onclick="creatingNewExecutivoPanel = false; render();" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
+                                    <i class="fas fa-times mr-2"></i> Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderEditExecutivoPanelModal() {
+            const panel = executivoPanels.find(p => p.id === editingExecutivoPanelId);
+            if (!panel) return '';
+            
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) { editingExecutivoPanelId = null; render(); }">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-5xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                        <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
+                            <h2 class="text-2xl font-bold text-slate-900">Editar Painel Executivo</h2>
+                            <button onclick="editingExecutivoPanelId = null; render();" class="p-2 hover:bg-slate-100 rounded-lg">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+                        <div class="p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
+                            ${renderExecutivoPanelForm(panel)}
+                            <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                <button onclick="saveEditExecutivoPanel()" class="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-save mr-2"></i> Salvar Alterações
+                                </button>
+                                <button onclick="editingExecutivoPanelId = null; render();" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
+                                    <i class="fas fa-times mr-2"></i> Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderExecutivoPanelForm(panel = null) {
+            const isEdit = !!panel;
+            const portaisList = [
+                'Lojista Pionel B2C (Auto e B&S)',
+                'Lojista Vivere B2C (Legado)',
+                'CDC Varejo',
+                'CDC Solar (Via C2 para a Rede)',
+                'FinOnline (C2C Vivere - Legado)',
+                'Portal SIM (Vivere)'
+            ];
+            const produtosList = [
+                'Crédito Direto ao Consumidor (CDC)',
+                'Cessão à Vista (CSC)',
+                'Cessão Parcelada (CSP)'
+            ];
+            const segurosList = [
+                'Seguro Auto',
+                'Seguro Prestamista',
+                'Seguro Mão na Roda'
+            ];
+            const indicadoresList = [
+                'Proposta Aprovadas / Mês (Auto)',
+                'Proposta Aprovadas / Mês (Non-Auto)'
+            ];
+
+            return `
+                <!-- Squad Name e Avatar -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-semibold text-slate-700 mb-2">Nome da Squad *</label>
+                        <input type="text" id="${isEdit ? 'edit-' : ''}executivo-squad-name" value="${panel?.squadName || ''}" placeholder="Ex: Squad de Crédito" class="w-full" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-slate-700 mb-2">Avatar do Owner (URL)</label>
+                        <input type="text" id="${isEdit ? 'edit-' : ''}executivo-owner-avatar" value="${panel?.ownerAvatar || ''}" placeholder="https://..." class="w-full">
+                        <p class="text-xs text-slate-500 mt-1">URL da imagem do responsável</p>
+                        ${panel?.ownerAvatar ? `
+                            <div class="mt-2">
+                                <img src="${panel.ownerAvatar}" alt="Avatar" class="w-16 h-16 rounded-full object-cover border-2 border-teal-400" onerror="this.style.display='none'">
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <!-- Portais -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">Portais Responsáveis</label>
+                    <div class="space-y-2 border border-slate-200 rounded-lg p-4 max-h-48 overflow-y-auto mb-4">
+                        ${portaisList.map(portal => `
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" value="${portal}" class="portal-checkbox" ${(panel?.portais || []).includes(portal) ? 'checked' : ''}>
+                                <span>${portal}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="${isEdit ? 'edit-' : ''}new-portal" placeholder="Adicionar novo portal..." class="flex-1">
+                        <button type="button" onclick="addCustomPortal(${isEdit})" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded">
+                            <i class="fas fa-plus"></i> Adicionar
+                        </button>
+                    </div>
+                    <div id="${isEdit ? 'edit-' : ''}custom-portais-list" class="mt-2 space-y-2">
+                        ${(panel?.portais || []).filter(p => !portaisList.includes(p)).map(p => `
+                            <div class="flex items-center justify-between bg-slate-50 p-2 rounded" data-value="${p}">
+                                <span>${p}</span>
+                                <button type="button" onclick="removeCustomItem('${p}', '${isEdit ? 'edit-' : ''}custom-portais-list')" class="text-red-600 hover:text-red-800">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- Produtos -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">Produtos</label>
+                    <div class="space-y-2 border border-slate-200 rounded-lg p-4 mb-4">
+                        ${produtosList.map(produto => `
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" value="${produto}" class="produto-checkbox" ${(panel?.produtos || []).includes(produto) ? 'checked' : ''}>
+                                <span>${produto}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="${isEdit ? 'edit-' : ''}new-produto" placeholder="Adicionar novo produto..." class="flex-1">
+                        <button type="button" onclick="addCustomProduto(${isEdit})" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded">
+                            <i class="fas fa-plus"></i> Adicionar
+                        </button>
+                    </div>
+                    <div id="${isEdit ? 'edit-' : ''}custom-produtos-list" class="mt-2 space-y-2">
+                        ${(panel?.produtos || []).filter(p => !produtosList.includes(p)).map(p => `
+                            <div class="flex items-center justify-between bg-slate-50 p-2 rounded">
+                                <span>${p}</span>
+                                <button type="button" onclick="removeCustomItem('${p}', '${isEdit ? 'edit-' : ''}custom-produtos-list')" class="text-red-600 hover:text-red-800">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- Seguros -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">Seguros</label>
+                    <div class="space-y-2 border border-slate-200 rounded-lg p-4 mb-4">
+                        ${segurosList.map(seguro => `
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" value="${seguro}" class="seguro-checkbox" ${(panel?.seguros || []).includes(seguro) ? 'checked' : ''}>
+                                <span>${seguro}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="${isEdit ? 'edit-' : ''}new-seguro" placeholder="Adicionar novo seguro..." class="flex-1">
+                        <button type="button" onclick="addCustomSeguro(${isEdit})" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded">
+                            <i class="fas fa-plus"></i> Adicionar
+                        </button>
+                    </div>
+                    <div id="${isEdit ? 'edit-' : ''}custom-seguros-list" class="mt-2 space-y-2">
+                        ${(panel?.seguros || []).filter(s => !segurosList.includes(s)).map(s => `
+                            <div class="flex items-center justify-between bg-slate-50 p-2 rounded">
+                                <span>${s}</span>
+                                <button type="button" onclick="removeCustomItem('${s}', '${isEdit ? 'edit-' : ''}custom-seguros-list')" class="text-red-600 hover:text-red-800">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- Indicadores Disponíveis e Selecionados -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">Indicadores Disponíveis</label>
+                    <div class="space-y-2 border border-slate-200 rounded-lg p-4 max-h-40 overflow-y-auto mb-4">
+                        ${indicadoresList.map(indicador => `
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" value="${indicador}" class="indicador-checkbox" ${(panel?.indicadores || []).includes(indicador) ? 'checked' : ''}>
+                                <span>${indicador}</span>
+                            </label>
+                        `).join('')}
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="${isEdit ? 'edit-' : ''}new-indicador" placeholder="Adicionar novo indicador..." class="flex-1">
+                        <button type="button" onclick="addCustomIndicador(${isEdit})" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded">
+                            <i class="fas fa-plus"></i> Adicionar
+                        </button>
+                    </div>
+                    <div id="${isEdit ? 'edit-' : ''}custom-indicadores-list" class="mt-2 space-y-2">
+                        ${(panel?.indicadores || []).filter(ind => !indicadoresList.includes(ind)).map(ind => `
+                            <div class="flex items-center justify-between bg-slate-50 p-2 rounded">
+                                <span>${ind}</span>
+                                <button type="button" onclick="removeCustomIndicador('${ind}', ${isEdit})" class="text-red-600 hover:text-red-800">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- Tecnologias -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">Tecnologias</label>
+                    <textarea id="${isEdit ? 'edit-' : ''}executivo-tecnologias" rows="3" placeholder="Descreva as tecnologias utilizadas..." class="w-full">${panel?.tecnologias || ''}</textarea>
+                </div>
+
+                <!-- Principais Entregas -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">Principais Entregas para o Ano</label>
+                    <div id="${isEdit ? 'edit-' : ''}principais-entregas-container" class="space-y-3">
+                        ${(() => {
+                            const entregas = panel?.principaisEntregas || [];
+                            const items = Array.isArray(entregas) ? entregas : [];
+                            return items.map((item, idx) => {
+                                const okrId = typeof item === 'object' && item.okrId ? item.okrId : '';
+                                const krId = typeof item === 'object' && item.krId ? item.krId : '';
+                                const okrKrValue = (okrId && krId) ? `${okrId}|${krId}` : '';
+                                return `
+                                <div class="border border-slate-200 rounded-lg p-4">
+                                    <textarea rows="2" placeholder="Descrição da entrega..." class="w-full mb-2 entrega-descricao">${typeof item === 'string' ? item : (item.descricao || '')}</textarea>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                                        <select class="w-full entrega-status">
+                                            <option value="not-started" ${(typeof item === 'object' && item.status === 'not-started') || (typeof item === 'string') ? 'selected' : ''}>Não Iniciado</option>
+                                            <option value="delivered" ${typeof item === 'object' && item.status === 'delivered' ? 'selected' : ''}>Entregue</option>
+                                            <option value="in-progress" ${typeof item === 'object' && item.status === 'in-progress' ? 'selected' : ''}>Em Andamento</option>
+                                            <option value="at-risk" ${typeof item === 'object' && item.status === 'at-risk' ? 'selected' : ''}>Em Risco</option>
+                                        </select>
+                                        <select class="w-full entrega-okr-kr">
+                                            <option value="">Não relacionado a OKR/KR</option>
+                                            ${(() => {
+                                                let options = '';
+                                                okrs.forEach(okr => {
+                                                    if (okr.krs && okr.krs.length > 0) {
+                                                        okr.krs.forEach(kr => {
+                                                            const value = `${okr.id}|${kr.id}`;
+                                                            const selected = (okrKrValue === value) ? 'selected' : '';
+                                                            const label = `${okr.objetivo} - ${kr.description || 'KR sem descrição'}`;
+                                                            options += `<option value="${value}" ${selected}>${label}</option>`;
+                                                        });
+                                                    }
+                                                });
+                                                return options;
+                                            })()}
+                                        </select>
+                                    </div>
+                                    <button type="button" onclick="this.parentElement.remove()" class="mt-2 text-red-600 hover:text-red-800 text-sm">
+                                        <i class="fas fa-trash mr-1"></i> Remover
+                                    </button>
+                                </div>
+                            `;
+                            }).join('');
+                        })()}
+                    </div>
+                    <button type="button" onclick="addPrincipaisEntregasItem(${isEdit})" class="mt-2 px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded">
+                        <i class="fas fa-plus mr-1"></i> Adicionar Entregas
+                    </button>
+                </div>
+
+                <!-- O que funciona bem -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">O que funciona bem</label>
+                    <textarea id="${isEdit ? 'edit-' : ''}executivo-o-que-funciona-bem" rows="4" placeholder="Descreva o que funciona bem na Squad..." class="w-full">${typeof panel?.oQueFuncionaBem === 'string' ? panel.oQueFuncionaBem : ''}</textarea>
+                </div>
+
+                <!-- Oportunidades -->
+                <div>
+                    <label class="block text-sm font-semibold text-slate-700 mb-2">Oportunidades</label>
+                    <div id="${isEdit ? 'edit-' : ''}oportunidades-container" class="space-y-3">
+                        ${(panel?.oportunidades || []).map(op => `
+                            <div class="flex items-center gap-2 border border-slate-200 rounded-lg p-4">
+                                <textarea rows="2" placeholder="Descreva a oportunidade..." class="flex-1 oportunidade-desc">${op}</textarea>
+                                <button type="button" onclick="this.parentElement.remove()" class="text-red-600 hover:text-red-800">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <button type="button" onclick="addOportunidadeItem(${isEdit})" class="mt-2 px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded">
+                        <i class="fas fa-plus mr-1"></i> Adicionar Oportunidade
+                    </button>
+                </div>
+            `;
+        }
+
+        function addCustomPortal(isEdit) {
+            const prefix = isEdit ? 'edit-' : '';
+            const input = document.getElementById(prefix + 'new-portal');
+            const value = input.value.trim();
+            if (!value) return;
+            
+            const container = document.getElementById(prefix + 'custom-portais-list');
+            container.insertAdjacentHTML('beforeend', `
+                <div class="flex items-center justify-between bg-slate-50 p-2 rounded" data-value="${value}">
+                    <span>${value}</span>
+                    <button type="button" onclick="removeCustomItem('${value}', '${prefix}custom-portais-list')" class="text-red-600 hover:text-red-800">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `);
+            input.value = '';
+        }
+
+        function addCustomProduto(isEdit) {
+            const prefix = isEdit ? 'edit-' : '';
+            const input = document.getElementById(prefix + 'new-produto');
+            const value = input.value.trim();
+            if (!value) return;
+            
+            const container = document.getElementById(prefix + 'custom-produtos-list');
+            container.insertAdjacentHTML('beforeend', `
+                <div class="flex items-center justify-between bg-slate-50 p-2 rounded" data-value="${value}">
+                    <span>${value}</span>
+                    <button type="button" onclick="removeCustomItem('${value}', '${prefix}custom-produtos-list')" class="text-red-600 hover:text-red-800">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `);
+            input.value = '';
+        }
+
+        function addCustomSeguro(isEdit) {
+            const prefix = isEdit ? 'edit-' : '';
+            const input = document.getElementById(prefix + 'new-seguro');
+            const value = input.value.trim();
+            if (!value) return;
+            
+            const container = document.getElementById(prefix + 'custom-seguros-list');
+            container.insertAdjacentHTML('beforeend', `
+                <div class="flex items-center justify-between bg-slate-50 p-2 rounded" data-value="${value}">
+                    <span>${value}</span>
+                    <button type="button" onclick="removeCustomItem('${value}', '${prefix}custom-seguros-list')" class="text-red-600 hover:text-red-800">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `);
+            input.value = '';
+        }
+
+        function addCustomIndicador(isEdit) {
+            const prefix = isEdit ? 'edit-' : '';
+            const input = document.getElementById(prefix + 'new-indicador');
+            const value = input.value.trim();
+            if (!value) return;
+            
+            const container = document.getElementById(prefix + 'custom-indicadores-list');
+            container.insertAdjacentHTML('beforeend', `
+                <div class="flex items-center justify-between bg-slate-50 p-2 rounded" data-value="${value}">
+                    <span>${value}</span>
+                    <button type="button" onclick="removeCustomItem('${value}', '${prefix}custom-indicadores-list')" class="text-red-600 hover:text-red-800">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `);
+            input.value = '';
+        }
+
+        function removeCustomItem(value, containerId) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            const items = container.querySelectorAll('div[data-value]');
+            items.forEach(item => {
+                if (item.getAttribute('data-value') === value || item.querySelector('span').textContent.trim() === value.trim()) {
+                    item.remove();
+                }
+            });
+        }
+
+        function removeCustomIndicador(indicador, isEdit) {
+            const prefix = isEdit ? 'edit-' : '';
+            removeCustomItem(indicador, prefix + 'custom-indicadores-list');
+        }
+
+        function addPrincipaisEntregasItem(isEdit) {
+            const prefix = isEdit ? 'edit-' : '';
+            const container = document.getElementById(prefix + 'principais-entregas-container');
+            
+            // Gerar opções de OKR/KR
+            let okrKrOptions = '<option value="">Não relacionado a OKR/KR</option>';
+            okrs.forEach(okr => {
+                if (okr.krs && okr.krs.length > 0) {
+                    okr.krs.forEach(kr => {
+                        const value = `${okr.id}|${kr.id}`;
+                        const label = `${okr.objetivo} - ${kr.description || 'KR sem descrição'}`;
+                        okrKrOptions += `<option value="${value}">${label}</option>`;
+                    });
+                }
+            });
+            
+            container.insertAdjacentHTML('beforeend', `
+                <div class="border border-slate-200 rounded-lg p-4">
+                    <textarea rows="2" placeholder="Descrição da entrega..." class="w-full mb-2 entrega-descricao"></textarea>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-2">
+                        <select class="w-full entrega-status">
+                            <option value="not-started">Não Iniciado</option>
+                            <option value="delivered">Entregue</option>
+                            <option value="in-progress">Em Andamento</option>
+                            <option value="at-risk">Em Risco</option>
+                        </select>
+                        <select class="w-full entrega-okr-kr">
+                            ${okrKrOptions}
+                        </select>
+                    </div>
+                    <button type="button" onclick="this.parentElement.remove()" class="mt-2 text-red-600 hover:text-red-800 text-sm">
+                        <i class="fas fa-trash mr-1"></i> Remover
+                    </button>
+                </div>
+            `);
+        }
+
+        function addOportunidadeItem(isEdit) {
+            const prefix = isEdit ? 'edit-' : '';
+            const container = document.getElementById(prefix + 'oportunidades-container');
+            container.insertAdjacentHTML('beforeend', `
+                <div class="flex items-center gap-2 border border-slate-200 rounded-lg p-4">
+                    <textarea rows="2" placeholder="Descreva a oportunidade..." class="flex-1 oportunidade-desc"></textarea>
+                    <button type="button" onclick="this.parentElement.remove()" class="text-red-600 hover:text-red-800">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `);
+        }
+
+        function saveNewExecutivoPanel() {
+            if (!selectedExecutivoCollectionId) {
+                alert('Por favor, selecione uma coleção primeiro.');
+                return;
+            }
+
+            const squadName = document.getElementById('executivo-squad-name').value.trim();
+            if (!squadName) {
+                alert('Por favor, informe o nome da Squad.');
+                return;
+            }
+
+            const panel = collectExecutivoPanelData();
+            panel.id = Date.now().toString();
+            panel.createdAt = new Date().toISOString();
+            panel.collectionId = selectedExecutivoCollectionId;
+            
+            executivoPanels.push(panel);
+            saveExecutivoPanels();
+            creatingNewExecutivoPanel = false;
+            
+            // Ajustar índice para o novo painel
+            const collectionPanels = executivoPanels.filter(p => p.collectionId === selectedExecutivoCollectionId);
+            currentExecutivoPanelIndex = collectionPanels.length - 1;
+            render();
+        }
+
+        function saveEditExecutivoPanel() {
+            const panel = executivoPanels.find(p => p.id === editingExecutivoPanelId);
+            if (!panel) return;
+
+            const squadName = document.getElementById('edit-executivo-squad-name').value.trim();
+            if (!squadName) {
+                alert('Por favor, informe o nome da Squad.');
+                return;
+            }
+
+            const updatedData = collectExecutivoPanelData(true);
+            Object.assign(panel, updatedData);
+            panel.updatedAt = new Date().toISOString();
+            
+            saveExecutivoPanels();
+            editingExecutivoPanelId = null;
+            render();
+        }
+
+        function collectExecutivoPanelData(isEdit = false) {
+            const prefix = isEdit ? 'edit-' : '';
+            
+            // Portais (selecionados + customizados)
+            const portaisSelecionados = Array.from(document.querySelectorAll('.portal-checkbox:checked')).map(cb => cb.value);
+            const customPortais = Array.from(document.querySelectorAll(`#${prefix}custom-portais-list span`)).map(span => span.textContent.trim());
+            const portais = [...portaisSelecionados, ...customPortais];
+            
+            // Produtos (selecionados + customizados)
+            const produtosSelecionados = Array.from(document.querySelectorAll('.produto-checkbox:checked')).map(cb => cb.value);
+            const customProdutos = Array.from(document.querySelectorAll(`#${prefix}custom-produtos-list span`)).map(span => span.textContent.trim());
+            const produtos = [...produtosSelecionados, ...customProdutos];
+            
+            // Seguros (selecionados + customizados)
+            const segurosSelecionados = Array.from(document.querySelectorAll('.seguro-checkbox:checked')).map(cb => cb.value);
+            const customSeguros = Array.from(document.querySelectorAll(`#${prefix}custom-seguros-list span`)).map(span => span.textContent.trim());
+            const seguros = [...segurosSelecionados, ...customSeguros];
+            
+            // Indicadores (selecionados + customizados)
+            const indicadoresSelecionados = Array.from(document.querySelectorAll('.indicador-checkbox:checked')).map(cb => cb.value);
+            const customIndicadores = Array.from(document.querySelectorAll(`#${prefix}custom-indicadores-list span`)).map(span => span.textContent.trim());
+            const indicadores = [...indicadoresSelecionados, ...customIndicadores];
+            
+            // Principais Entregas (array com status e relação OKR/KR)
+            const principaisEntregas = Array.from(document.querySelectorAll(`#${prefix}principais-entregas-container > div`)).map(div => {
+                const descricao = div.querySelector('.entrega-descricao').value.trim();
+                const status = div.querySelector('.entrega-status').value;
+                const okrKrSelect = div.querySelector('.entrega-okr-kr');
+                const okrKrValue = okrKrSelect ? okrKrSelect.value : '';
+                
+                const entrega = {
+                    descricao,
+                    status
+                };
+                
+                // Adicionar relação OKR/KR se selecionado
+                if (okrKrValue) {
+                    const [okrId, krId] = okrKrValue.split('|');
+                    entrega.okrId = okrId;
+                    entrega.krId = krId;
+                }
+                
+                return entrega;
+            }).filter(item => item.descricao);
+            
+            // O que funciona bem (texto simples)
+            const oQueFuncionaBem = document.getElementById(prefix + 'executivo-o-que-funciona-bem').value.trim();
+            
+            // Oportunidades
+            const oportunidades = Array.from(document.querySelectorAll(`#${prefix}oportunidades-container > div textarea`)).map(ta => ta.value.trim()).filter(v => v);
+
+            return {
+                squadName: document.getElementById(prefix + 'executivo-squad-name').value.trim(),
+                ownerAvatar: document.getElementById(prefix + 'executivo-owner-avatar').value.trim(),
+                portais,
+                produtos,
+                seguros,
+                indicadores,
+                tecnologias: document.getElementById(prefix + 'executivo-tecnologias').value.trim(),
+                principaisEntregas,
+                oQueFuncionaBem,
+                oportunidades
+            };
+        }
+
+        function deleteExecutivoPanel(panelId) {
+            if (!confirm('Tem certeza que deseja excluir este painel?')) return;
+            
+            executivoPanels = executivoPanels.filter(p => p.id !== panelId);
+            saveExecutivoPanels();
+            
+            if (currentExecutivoPanelIndex >= executivoPanels.length) {
+                currentExecutivoPanelIndex = Math.max(0, executivoPanels.length - 1);
+            }
+            
+            render();
+        }
+
         function render() {
             // Sincronizar KRs com indicadores sempre que renderizar
             syncKRsToIndicators();
@@ -5219,6 +6660,9 @@
                     break;
                 case 'journeys':
                     app.innerHTML = renderJourneysPage();
+                    break;
+                case 'executivo':
+                    app.innerHTML = renderExecutivoPanelPage();
                     break;
                 case 'fronts':
                 default:
