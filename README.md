@@ -36,3 +36,4 @@ Opções rápidas para visualizar a página durante o desenvolvimento:
 - Revisar acessibilidade (semântica, contraste, navegação por teclado)
 - Otimizar performance (minificação, assets externos, pré-carregamento de fontes)
 - Padronizar formatação (EditorConfig/Prettier) e CI simples para validação HTML
+
