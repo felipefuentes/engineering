@@ -817,6 +817,8 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
         let editFrontTab = 'basic';
         let creatingNewJourney = false;
         let editingJourneyId = null;
+        let showEditJourneyModal = false;
+        let editingJourneyModalId = null;
         let selectedPillar = null;
         let selectedAttribute = null;
         let filters = {
@@ -1295,6 +1297,59 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
             if (bounds.end !== null && timestamp > bounds.end) return false;
             return true;
         }
+        function alertMatchesDateFilter(alert, bounds) {
+            if (!bounds.start && !bounds.end) return true;
+            const dateCandidates = [
+                alert?.openedAt,
+                alert?.closedAt,
+                alert?.date,
+                alert?.createdAt
+            ];
+            let timestamp = null;
+            for (const candidate of dateCandidates) {
+                timestamp = parseEventDateValue(candidate);
+                if (timestamp !== null) break;
+            }
+            if (timestamp === null) return true;
+            if (bounds.start !== null && timestamp < bounds.start) return false;
+            if (bounds.end !== null && timestamp > bounds.end) return false;
+            return true;
+        }
+        function obsolescenceMatchesDateFilter(item, bounds) {
+            if (!bounds.start && !bounds.end) return true;
+            const dateCandidates = [
+                item?.endOfSupport,
+                item?.createdAt,
+                item?.date
+            ];
+            let timestamp = null;
+            for (const candidate of dateCandidates) {
+                timestamp = parseEventDateValue(candidate);
+                if (timestamp !== null) break;
+            }
+            if (timestamp === null) return true;
+            if (bounds.start !== null && timestamp < bounds.start) return false;
+            if (bounds.end !== null && timestamp > bounds.end) return false;
+            return true;
+        }
+        function vulnerabilityMatchesDateFilter(vuln, bounds) {
+            if (!bounds.start && !bounds.end) return true;
+            const dateCandidates = [
+                vuln?.discoveredAt,
+                vuln?.dueAt,
+                vuln?.createdAt,
+                vuln?.date
+            ];
+            let timestamp = null;
+            for (const candidate of dateCandidates) {
+                timestamp = parseEventDateValue(candidate);
+                if (timestamp !== null) break;
+            }
+            if (timestamp === null) return true;
+            if (bounds.start !== null && timestamp < bounds.start) return false;
+            if (bounds.end !== null && timestamp > bounds.end) return false;
+            return true;
+        }
 
         function getJourneyIncidents(journey, bounds = getJourneyEventFilterBounds()) {
             if (!journey || !journey.events) return [];
@@ -1331,19 +1386,19 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
         function getJourneyAlerts(journey, bounds = getJourneyEventFilterBounds()) {
             if (!journey || !journey.events) return [];
             return journey.events.filter(event =>
-                event.category === EVENT_CATEGORY_ALERT && incidentMatchesDateFilter(event, bounds)
+                event.category === EVENT_CATEGORY_ALERT && alertMatchesDateFilter(event, bounds)
             );
         }
         function getJourneyObsolescenceItems(journey, bounds = getJourneyEventFilterBounds()) {
             if (!journey || !journey.events) return [];
             return journey.events.filter(event =>
-                event.category === EVENT_CATEGORY_OBSOLESCENCE && incidentMatchesDateFilter(event, bounds)
+                event.category === EVENT_CATEGORY_OBSOLESCENCE && obsolescenceMatchesDateFilter(event, bounds)
             );
         }
         function getJourneyVulnerabilities(journey, bounds = getJourneyEventFilterBounds()) {
             if (!journey || !journey.events) return [];
             return journey.events.filter(event =>
-                event.category === EVENT_CATEGORY_VULNERABILITY && incidentMatchesDateFilter(event, bounds)
+                event.category === EVENT_CATEGORY_VULNERABILITY && vulnerabilityMatchesDateFilter(event, bounds)
             );
         }
 
@@ -2165,17 +2220,19 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
         }
 
         function openEditJourneyModal(journeyId) {
-            editingJourneyId = journeyId;
+            editingJourneyModalId = journeyId;
+            showEditJourneyModal = true;
             render();
         }
 
         function closeEditJourneyModal() {
-            editingJourneyId = null;
+            editingJourneyModalId = null;
+            showEditJourneyModal = false;
             render();
         }
 
         function saveEditJourney() {
-            const journey = journeys.find(j => j.id === editingJourneyId);
+            const journey = journeys.find(j => j.id === editingJourneyModalId);
             if (!journey) {
                 alert('Jornada não encontrada!');
                 return;
@@ -2589,6 +2646,187 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
                 alert('Não foi possível gerar o modelo de importação. Tente novamente.');
             }
         }
+        function buildSheetFromColumns(columns, rows) {
+            // Criar array de arrays: primeira linha são os headers, seguida das linhas de dados
+            const data = [];
+            // Adicionar headers (primeira linha)
+            const headers = columns.map(col => col.header);
+            data.push(headers);
+            // Adicionar linhas de dados
+            rows.forEach(row => {
+                const rowData = columns.map(col => {
+                    const value = row[col.key];
+                    // Converter valores undefined/null para string vazia
+                    if (value === undefined || value === null) return '';
+                    // Se for array, converter para string separada por ;
+                    if (Array.isArray(value)) return value.join('; ');
+                    // Se for objeto Date, converter para ISO string
+                    if (value instanceof Date) return value.toISOString();
+                    // Retornar o valor como string
+                    return String(value);
+                });
+                data.push(rowData);
+            });
+            // Criar planilha a partir do array de arrays
+            return XLSX.utils.aoa_to_sheet(data);
+        }
+        function collectIncidentRows() {
+            const rows = [];
+            journeys.forEach(journey => {
+                if (!journey.events) return;
+                const incidents = getJourneyIncidents(journey);
+                incidents.forEach(incident => {
+                    const affectedJourney = incident.affectedJourney 
+                        ? journeys.find(j => j.id === incident.affectedJourney) || journey
+                        : journey;
+                    rows.push({
+                        journeyId: journey.id,
+                        journeyRef: journey.name,
+                        incidentNumber: incident.incidentNumber || '',
+                        date: incident.date || incident.createdAt || '',
+                        mttr: incident.mttr || '',
+                        description: incident.description || '',
+                        relatedRisk: incident.relatedRisk || '',
+                        origin: incident.origin || '',
+                        prevention: incident.prevention || '',
+                        lessons: incident.lessons || '',
+                        pillar: incident.pillar ? (typeof incident.pillar === 'string' ? incident.pillar : Object.keys(incident.pillar)[0]) : '',
+                        attributes: Array.isArray(incident.attributes) ? incident.attributes.join('; ') : (incident.attributes || '')
+                    });
+                });
+            });
+            return rows;
+        }
+        function collectFunctionalIncidentRows() {
+            const rows = [];
+            journeys.forEach(journey => {
+                if (!journey.events) return;
+                journey.events.forEach(event => {
+                    if (event.category !== EVENT_CATEGORY_INCIDENT_FUNCTIONAL) return;
+                    const affectedJourney = event.affectedJourney 
+                        ? journeys.find(j => j.id === event.affectedJourney) || journey
+                        : journey;
+                    rows.push({
+                        journeyId: journey.id,
+                        journeyRef: affectedJourney.name,
+                        incidentNumber: event.incidentNumber || '',
+                        acronym: event.acronym || '',
+                        createdAt: event.createdAt || '',
+                        resolvedAt: event.resolvedAt || '',
+                        shortDescription: event.shortDescription || '',
+                        description: event.description || '',
+                        resolutionNotes: event.resolutionNotes || '',
+                        resolutionType: event.resolutionType || '',
+                        classification: event.classification || ''
+                    });
+                });
+            });
+            return rows;
+        }
+        function collectRiskRows() {
+            const rows = [];
+            journeys.forEach(journey => {
+                if (!journey.events) return;
+                const risks = getJourneyRisks(journey);
+                risks.forEach(risk => {
+                    rows.push({
+                        journeyId: journey.id,
+                        journeyRef: journey.name,
+                        plannerId: risk.plannerId || '',
+                        taskName: risk.taskName || '',
+                        progress: risk.progress || 0,
+                        priority: risk.priority || '',
+                        assignedTo: risk.assignedTo || '',
+                        createdBy: risk.createdBy || '',
+                        createdAt: risk.createdAt || '',
+                        startDate: risk.startDate || '',
+                        dueDate: risk.dueDate || '',
+                        isRecurring: risk.isRecurring ? 'Sim' : 'Não',
+                        isOverdue: risk.isOverdue ? 'Sim' : 'Não',
+                        isCompleted: risk.isCompleted ? 'Sim' : 'Não',
+                        completedAt: risk.completedAt || '',
+                        completedBy: risk.completedBy || '',
+                        checklist: risk.checklist || '',
+                        labels: risk.labels || '',
+                        description: risk.description || ''
+                    });
+                });
+            });
+            return rows;
+        }
+        function collectAlertRows() {
+            const rows = [];
+            journeys.forEach(journey => {
+                if (!journey.events) return;
+                const alerts = getJourneyAlerts(journey);
+                alerts.forEach(alert => {
+                    rows.push({
+                        journeyId: journey.id,
+                        journeyRef: journey.name,
+                        alertId: alert.alertId || '',
+                        title: alert.title || '',
+                        source: alert.source || '',
+                        severity: alert.severity || '',
+                        status: alert.status || '',
+                        openedAt: alert.openedAt || '',
+                        closedAt: alert.closedAt || '',
+                        impactedService: alert.impactedService || '',
+                        owner: alert.owner || '',
+                        tags: alert.tags || '',
+                        url: alert.url || '',
+                        notes: alert.notes || ''
+                    });
+                });
+            });
+            return rows;
+        }
+        function collectObsolescenceRows() {
+            const rows = [];
+            journeys.forEach(journey => {
+                if (!journey.events) return;
+                const obsolescenceItems = getJourneyObsolescenceItems(journey);
+                obsolescenceItems.forEach(item => {
+                    rows.push({
+                        journeyId: journey.id,
+                        journeyRef: journey.name,
+                        component: item.component || '',
+                        vendor: item.vendor || '',
+                        currentVersion: item.currentVersion || '',
+                        targetVersion: item.targetVersion || '',
+                        endOfSupport: item.endOfSupport || '',
+                        impact: item.impact || '',
+                        remediationPlan: item.remediationPlan || '',
+                        status: item.status || '',
+                        owner: item.owner || '',
+                        notes: item.notes || ''
+                    });
+                });
+            });
+            return rows;
+        }
+        function collectVulnerabilityRows() {
+            const rows = [];
+            journeys.forEach(journey => {
+                if (!journey.events) return;
+                const vulnerabilities = getJourneyVulnerabilities(journey);
+                vulnerabilities.forEach(vuln => {
+                    rows.push({
+                        journeyId: journey.id,
+                        journeyRef: journey.name,
+                        identifier: vuln.identifier || '',
+                        severity: vuln.severity || '',
+                        cvssScore: vuln.cvssScore || '',
+                        affectedService: vuln.affectedService || '',
+                        discoveredAt: vuln.discoveredAt || '',
+                        dueAt: vuln.dueAt || '',
+                        status: vuln.status || '',
+                        owner: vuln.owner || '',
+                        notes: vuln.notes || ''
+                    });
+                });
+            });
+            return rows;
+        }
 
         function buildJourneysWorkbook(mode, options) {
             const workbook = XLSX.utils.book_new();
@@ -2600,9 +2838,12 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
                     ['2. Utilize a aba "Incidentes Quebra Servico" para relacionar incidentes de quebra de serviço.'],
                     ['3. Utilize a aba "Incidentes Funcionais" para registrar incidentes funcionais.'],
                     ['4. Utilize a aba "Riscos" para relacionar riscos às jornadas.'],
-                    ['5. Sempre informe ao menos o Nome e a Sigla da jornada.'],
-                    ['6. Para incidentes e riscos, a jornada precisa existir antes da importação.'],
-                    ['7. Colunas marcadas como (opcional) podem ser deixadas em branco.']
+                    ['5. Utilize a aba "Alertas" para registrar alertas das ferramentas de monitoramento.'],
+                    ['6. Utilize a aba "Obsolescência" para registrar itens com fim de suporte próximo.'],
+                    ['7. Utilize a aba "Vulnerabilidades" para registrar vulnerabilidades de segurança.'],
+                    ['8. Sempre informe ao menos o Nome e a Sigla da jornada.'],
+                    ['9. Para eventos, a jornada precisa existir antes da importação.'],
+                    ['10. Colunas marcadas como (opcional) podem ser deixadas em branco.']
                 ];
                 const instructionsSheet = XLSX.utils.aoa_to_sheet(instructions);
                 XLSX.utils.book_append_sheet(workbook, instructionsSheet, 'Instruções');
@@ -2694,6 +2935,64 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
                         }];
                     const riskSheet = buildSheetFromColumns(riskSheetColumns, riskRows);
                     XLSX.utils.book_append_sheet(workbook, riskSheet, 'Riscos');
+                } else if (category === EVENT_CATEGORY_ALERT) {
+                    const alertRows = mode === 'data'
+                        ? collectAlertRows()
+                        : [{
+                            journeyId: '',
+                            journeyRef: journeys[0] ? `${journeys[0].name}` : 'Ex: Jornada de Pagamentos',
+                            alertId: 'ALERT-12345',
+                            title: 'Alta utilização de CPU no serviço X',
+                            source: 'Dynatrace',
+                            severity: 'High',
+                            status: 'Aberto',
+                            openedAt: new Date().toISOString(),
+                            closedAt: '',
+                            impactedService: 'Serviço de Pagamentos',
+                            owner: 'Responsável',
+                            tags: '#producao; #critico',
+                            url: 'https://link.para.ocorrencia',
+                            notes: 'Observações e ações adotadas'
+                        }];
+                    const alertSheet = buildSheetFromColumns(alertSheetColumns, alertRows);
+                    XLSX.utils.book_append_sheet(workbook, alertSheet, 'Alertas');
+                } else if (category === EVENT_CATEGORY_OBSOLESCENCE) {
+                    const obsolescenceRows = mode === 'data'
+                        ? collectObsolescenceRows()
+                        : [{
+                            journeyId: '',
+                            journeyRef: journeys[0] ? `${journeys[0].name}` : 'Ex: Jornada de Pagamentos',
+                            component: 'SQL Server 2012',
+                            vendor: 'Microsoft',
+                            currentVersion: '2012',
+                            targetVersion: '2019',
+                            endOfSupport: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
+                            impact: 'Impacto operacional descrito',
+                            remediationPlan: 'Plano de remediação resumido',
+                            status: 'Em análise',
+                            owner: 'Responsável',
+                            notes: 'Observações adicionais'
+                        }];
+                    const obsolescenceSheet = buildSheetFromColumns(obsolescenceSheetColumns, obsolescenceRows);
+                    XLSX.utils.book_append_sheet(workbook, obsolescenceSheet, 'Obsolescência');
+                } else if (category === EVENT_CATEGORY_VULNERABILITY) {
+                    const vulnerabilityRows = mode === 'data'
+                        ? collectVulnerabilityRows()
+                        : [{
+                            journeyId: '',
+                            journeyRef: journeys[0] ? `${journeys[0].name}` : 'Ex: Jornada de Pagamentos',
+                            identifier: 'CVE-2023-12345',
+                            severity: 'High',
+                            cvssScore: '7.5 (Base Score)',
+                            affectedService: 'API Gateway',
+                            discoveredAt: new Date().toISOString().split('T')[0],
+                            dueAt: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().split('T')[0],
+                            status: 'Aberto',
+                            owner: 'Responsável',
+                            notes: 'Detalhes, evidências e plano de ação'
+                        }];
+                    const vulnerabilitySheet = buildSheetFromColumns(vulnerabilitySheetColumns, vulnerabilityRows);
+                    XLSX.utils.book_append_sheet(workbook, vulnerabilitySheet, 'Vulnerabilidades');
                 }
             });
             return workbook;
@@ -3110,6 +3409,7 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
             if (showServiceNowApiModal) { showServiceNowApiModal = false; changed = true; }
             if (showCMDBImportModal) { showCMDBImportModal = false; changed = true; }
             if (creatingNewJourney) { creatingNewJourney = false; changed = true; }
+            if (showEditJourneyModal) { showEditJourneyModal = false; editingJourneyModalId = null; changed = true; }
             if (creatingNewOKR) { creatingNewOKR = false; changed = true; }
             if (editingOKRId) { editingOKRId = null; changed = true; }
             if (showingFrontsRelationModal) { showingFrontsRelationModal = null; draggedFrontId = null; changed = true; }
@@ -5226,6 +5526,18 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
                 updateOKRsFromIndicators(pilar, indicador, parseFloat(value) || 0);
             }
         }
+        function updateIndicatorPillar(pillar) {
+            selectedIndicatorPillar = pillar === 'all' ? null : pillar;
+            render();
+        }
+        function updateIndicatorMonth(month) {
+            selectedIndicatorMonth = parseInt(month) || new Date().getMonth() + 1;
+            render();
+        }
+        function updateIndicatorYear(year) {
+            selectedIndicatorYear = parseInt(year) || new Date().getFullYear();
+            render();
+        }
         function updateOKRsFromIndicators(pilar, indicador, value) {
             const monthYearKey = `${selectedIndicatorYear}-${String(selectedIndicatorMonth).padStart(2, '0')}`;
             
@@ -5581,48 +5893,126 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
             return insights;
         }
         function renderIndicatorChart(history, maxValue = null) {
-            if (history.length === 0) return '<p class="text-sm text-slate-400 italic">Sem dados suficientes para gráfico</p>';
+            if (!history || history.length === 0) return '<p class="text-sm text-slate-400 italic">Sem dados suficientes para gráfico</p>';
             
-            const max = maxValue || Math.max(...history.map(h => h.value), 1);
+            // Filtrar valores inválidos e garantir que todos os valores sejam números válidos
+            const validHistory = history.map(h => ({
+                ...h,
+                value: typeof h.value === 'number' && !isNaN(h.value) && isFinite(h.value) ? h.value : 0
+            }));
+            
+            // Calcular max garantindo que seja pelo menos 1
+            const values = validHistory.map(h => h.value);
+            const calculatedMax = values.length > 0 ? Math.max(...values, 0) : 1;
+            const max = maxValue && !isNaN(maxValue) && isFinite(maxValue) && maxValue > 0 
+                ? maxValue 
+                : (calculatedMax > 0 ? calculatedMax : 1);
+            
             const chartHeight = 150;
-            const chartWidth = history.length * 50;
+            const chartWidth = Math.max(validHistory.length * 50, 200);
             const padding = { top: 10, right: 20, bottom: 30, left: 40 };
+            let chartAreaWidth = chartWidth - padding.left - padding.right;
+            let chartAreaHeight = chartHeight - padding.top - padding.bottom;
             
-            const points = history.map((h, i) => {
-                const x = padding.left + (i / (history.length - 1 || 1)) * (chartWidth - padding.left - padding.right);
-                const y = chartHeight - padding.bottom - (h.value / max) * (chartHeight - padding.top - padding.bottom);
-                return `${x},${y}`;
+            // Garantir que temos dimensões válidas
+            if (chartAreaWidth <= 0) chartAreaWidth = 100;
+            if (chartAreaHeight <= 0) chartAreaHeight = 100;
+            
+            // Garantir que temos pelo menos um ponto válido
+            if (validHistory.length === 0) return '<p class="text-sm text-slate-400 italic">Sem dados válidos para gráfico</p>';
+            
+            // Calcular pontos com tratamento para divisão por zero e valores inválidos
+            const points = validHistory.map((h, i) => {
+                // Para um único ponto, colocar no meio do gráfico
+                // Para múltiplos pontos, distribuir uniformemente
+                let x;
+                if (validHistory.length === 1) {
+                    x = padding.left + chartAreaWidth / 2;
+                } else {
+                    const divisor = validHistory.length - 1;
+                    x = padding.left + (i / divisor) * chartAreaWidth;
+                }
+                
+                // Normalizar o valor entre 0 e 1
+                const normalizedValue = max > 0 ? Math.max(0, Math.min(1, h.value / max)) : 0;
+                const y = chartHeight - padding.bottom - normalizedValue * chartAreaHeight;
+                
+                // Garantir que x e y são números válidos e finitos
+                let validX = x;
+                let validY = y;
+                
+                if (isNaN(x) || !isFinite(x)) {
+                    validX = padding.left + (chartAreaWidth / 2);
+                } else {
+                    validX = Math.max(padding.left, Math.min(chartWidth - padding.right, x));
+                }
+                
+                if (isNaN(y) || !isFinite(y)) {
+                    validY = chartHeight - padding.bottom;
+                } else {
+                    validY = Math.max(padding.top, Math.min(chartHeight - padding.bottom, y));
+                }
+                
+                return `${validX.toFixed(2)},${validY.toFixed(2)}`;
             }).join(' ');
             
-            const pathData = `M ${points}`;
+            if (!points || points.trim() === '') {
+                return '<p class="text-sm text-slate-400 italic">Erro ao gerar gráfico</p>';
+            }
+            
+            const pathData = points;
+            const firstX = padding.left;
+            const lastX = padding.left + chartAreaWidth;
+            const bottomY = chartHeight - padding.bottom;
+            const gradientId = `gradient-${Math.random().toString(36).substr(2, 9)}`;
             
             return `
                 <svg width="${chartWidth}" height="${chartHeight}" class="w-full" style="max-width: 100%; height: auto;">
                     <defs>
-                        <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <linearGradient id="${gradientId}" x1="0%" y1="0%" x2="0%" y2="100%">
                             <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.3" />
                             <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:0" />
                         </linearGradient>
                     </defs>
                     <!-- Grid -->
                     ${[0, 0.25, 0.5, 0.75, 1].map(p => {
-                        const y = chartHeight - padding.bottom - p * (chartHeight - padding.top - padding.bottom);
+                        const y = bottomY - p * chartAreaHeight;
                         return `<line x1="${padding.left}" y1="${y}" x2="${chartWidth - padding.right}" y2="${y}" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="2,2" />`;
                     }).join('')}
                     <!-- Area under curve -->
-                    <path d="${pathData} L ${padding.left + (chartWidth - padding.left - padding.right)},${chartHeight - padding.bottom} L ${padding.left},${chartHeight - padding.bottom} Z" fill="url(#gradient)" />
+                    <path d="M ${pathData} L ${lastX},${bottomY} L ${firstX},${bottomY} Z" fill="url(#${gradientId})" />
                     <!-- Line -->
                     <path d="M ${pathData}" stroke="#3b82f6" stroke-width="2" fill="none" />
                     <!-- Points -->
-                    ${history.map((h, i) => {
-                        const x = padding.left + (i / (history.length - 1 || 1)) * (chartWidth - padding.left - padding.right);
-                        const y = chartHeight - padding.bottom - (h.value / max) * (chartHeight - padding.top - padding.bottom);
-                        return `<circle cx="${x}" cy="${y}" r="3" fill="#3b82f6" />`;
+                    ${validHistory.map((h, i) => {
+                        let x;
+                        if (validHistory.length === 1) {
+                            x = padding.left + chartAreaWidth / 2;
+                        } else {
+                            const divisor = validHistory.length - 1;
+                            x = padding.left + (i / divisor) * chartAreaWidth;
+                        }
+                        
+                        const normalizedValue = max > 0 ? Math.max(0, Math.min(1, h.value / max)) : 0;
+                        const y = bottomY - normalizedValue * chartAreaHeight;
+                        
+                        let validX = isNaN(x) || !isFinite(x) ? (padding.left + chartAreaWidth / 2) : Math.max(padding.left, Math.min(chartWidth - padding.right, x));
+                        let validY = isNaN(y) || !isFinite(y) ? bottomY : Math.max(padding.top, Math.min(chartHeight - padding.bottom, y));
+                        
+                        return `<circle cx="${validX.toFixed(2)}" cy="${validY.toFixed(2)}" r="3" fill="#3b82f6" />`;
                     }).join('')}
                     <!-- Labels -->
-                    ${history.map((h, i) => {
-                        const x = padding.left + (i / (history.length - 1 || 1)) * (chartWidth - padding.left - padding.right);
-                        return `<text x="${x}" y="${chartHeight - 5}" text-anchor="middle" font-size="10" fill="#6b7280">${h.label}</text>`;
+                    ${validHistory.map((h, i) => {
+                        let x;
+                        if (validHistory.length === 1) {
+                            x = padding.left + chartAreaWidth / 2;
+                        } else {
+                            const divisor = validHistory.length - 1;
+                            x = padding.left + (i / divisor) * chartAreaWidth;
+                        }
+                        
+                        const validX = isNaN(x) || !isFinite(x) ? (padding.left + chartAreaWidth / 2) : Math.max(padding.left, Math.min(chartWidth - padding.right, x));
+                        return `<text x="${validX.toFixed(2)}" y="${chartHeight - 5}" text-anchor="middle" font-size="10" fill="#6b7280">${h.label || ''}</text>`;
                     }).join('')}
                 </svg>
             `;
@@ -5906,7 +6296,7 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
                                 });
                                 
                                 return `
-                                    <div class="bg-white rounded-lg shadow-md border-2 border-slate-200 p-6 hover:border-blue-400 transition-colors cursor-pointer" onclick="updateIndicatorPillar('${pilar}')">
+                                    <div class="bg-white rounded-lg shadow-md border-2 border-slate-200 p-6 hover:border-blue-400 transition-colors cursor-pointer" onclick="updateIndicatorPillar('${pilar.replace(/'/g, "\\'")}')">
                                         <div class="flex items-center justify-between">
                                             <div class="flex-1">
                                                 <h3 class="text-xl font-bold text-slate-900 mb-2">${pilar}</h3>
@@ -7155,6 +7545,60 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
                 render();
             }
         }
+        function renderEditJourneyModal() {
+            if (!showEditJourneyModal || !editingJourneyModalId) return '';
+            const journey = journeys.find(j => j.id === editingJourneyModalId);
+            if (!journey) return '';
+
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeEditJourneyModal()">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full m-4 edit-modal" onclick="event.stopPropagation()">
+                        <div class="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between">
+                            <h2 class="text-2xl font-bold text-slate-900">Editar Jornada</h2>
+                            <button onclick="closeEditJourneyModal()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors" aria-label="Fechar modal de edição">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+
+                        <div class="p-6 space-y-4 overflow-y-auto max-h-[calc(85vh-120px)]">
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Nome da Jornada *</label>
+                                <input type="text" id="edit-journey-name" value="${journey.name || ''}" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: Jornada de Pagamentos">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Sigla *</label>
+                                <input type="text" id="edit-journey-acronym" value="${journey.acronym || ''}" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Ex: PAY" maxlength="10">
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Status</label>
+                                <select id="edit-journey-status" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    ${Object.entries(journeyStatusConfig).map(([key, config]) => `
+                                        <option value="${key}" ${(journey.status || 'active') === key ? 'selected' : ''}>${config.label}</option>
+                                    `).join('')}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Owner/Gestor</label>
+                                <input type="text" id="edit-journey-owner" value="${journey.owner || ''}" class="w-full border border-slate-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nome do responsável">
+                            </div>
+
+                            <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                <button onclick="saveEditJourney()" class="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-save mr-2"></i> Salvar Alterações
+                                </button>
+                                <button onclick="closeEditJourneyModal()" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
+                                    <i class="fas fa-times mr-2"></i> Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         function renderJourneysPage() {
             return `
                 <header class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
@@ -7535,6 +7979,7 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
                 ${showVulnerabilityOverview ? renderVulnerabilityOverviewModal() : ''}
                 ${showRiskOverview ? renderRiskOverviewModal() : ''}
                 ${showEditEventModal ? renderEditEventModal() : ''}
+                ${showEditJourneyModal ? renderEditJourneyModal() : ''}
             `;
         }
         function renderJourneysExportModal() {
@@ -7846,6 +8291,20 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
             `;
         }
         function renderRiskOverviewModal() {
+            const journey = journeys.find(j => j.id === riskOverviewJourneyId);
+            if (!journey) return '';
+
+            const bounds = getJourneyEventFilterBounds();
+            const risks = getJourneyRisks(journey, bounds);
+
+            const completedCount = risks.filter(r => r.isCompleted).length;
+            const overdueCount = risks.filter(r => r.isOverdue).length;
+            const urgentCount = risks.filter(r => r.priority === 'Urgente' || r.priority === 'Alta').length;
+
+            const avgProgress = risks.length > 0
+                ? Math.round(risks.reduce((sum, r) => sum + (r.progress || 0), 0) / risks.length)
+                : 0;
+
             return `
                 <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeRiskOverview()">
                     <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
@@ -7947,7 +8406,7 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
                                                 ` : ''}
                                                 ${risk.labels ? `
                                                     <div class="flex flex-wrap gap-2 mt-3">
-                                                        ${risk.labels.split(',').map(label => `<span class="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs">${label.trim()}</span>`).join('')}
+                                                        ${(typeof risk.labels === 'string' ? risk.labels.split(/[,;]/) : []).map(label => `<span class="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs">${label.trim()}</span>`).join('')}
                                                     </div>
                                                 ` : ''}
                                             </div>
