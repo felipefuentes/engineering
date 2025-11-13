@@ -3545,27 +3545,41 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
             closeEditFront();
         }
         function saveNewFront() {
-            const name = document.getElementById('new-front-name').value.trim();
-            const ownerName = document.getElementById('new-front-owner').value.trim();
-            const maturityLevel = parseInt(document.getElementById('new-front-maturity').value);
-            const status = document.getElementById('new-front-status').value;
+            const nameEl = document.getElementById('new-front-name');
+            const ownerEl = document.getElementById('new-front-owner');
+            const maturityEl = document.getElementById('new-front-maturity');
+            const statusEl = document.getElementById('new-front-status');
+
+            if (!nameEl || !ownerEl || !maturityEl || !statusEl) {
+                alert('Erro: Campos do formulário não encontrados. Por favor, recarregue a página.');
+                return;
+            }
+
+            const name = nameEl.value.trim();
+            const ownerName = ownerEl.value.trim();
+            const maturityLevel = parseInt(maturityEl.value);
+            const status = statusEl.value;
 
             if (!name || !ownerName) {
                 alert('Nome e Owner são obrigatórios!');
                 return;
             }
 
-            const objectivesText = document.getElementById('new-front-objectives').value.trim();
-            const mainObjectives = objectivesText.split('\n').filter(o => o.trim());
+            const objectivesEl = document.getElementById('new-front-objectives');
+            const objectivesText = objectivesEl ? objectivesEl.value.trim() : '';
+            const mainObjectives = objectivesText ? objectivesText.split('\n').filter(o => o.trim()) : [];
 
-            const currentActionsText = document.getElementById('new-front-current-actions').value.trim();
-            const currentActions = currentActionsText.split('\n').filter(a => a.trim());
+            const currentActionsEl = document.getElementById('new-front-current-actions');
+            const currentActionsText = currentActionsEl ? currentActionsEl.value.trim() : '';
+            const currentActions = currentActionsText ? currentActionsText.split('\n').filter(a => a.trim()) : [];
 
-            const futureActionsText = document.getElementById('new-front-future-actions').value.trim();
-            const futureActions = futureActionsText.split('\n').filter(a => a.trim());
+            const futureActionsEl = document.getElementById('new-front-future-actions');
+            const futureActionsText = futureActionsEl ? futureActionsEl.value.trim() : '';
+            const futureActions = futureActionsText ? futureActionsText.split('\n').filter(a => a.trim()) : [];
 
-            const attentionPointsText = document.getElementById('new-front-attention-points').value.trim();
-            const attentionPoints = attentionPointsText.split('\n').filter(p => p.trim());
+            const attentionPointsEl = document.getElementById('new-front-attention-points');
+            const attentionPointsText = attentionPointsEl ? attentionPointsEl.value.trim() : '';
+            const attentionPoints = attentionPointsText ? attentionPointsText.split('\n').filter(p => p.trim()) : [];
 
             const newFront = {
                 id: 'f' + Date.now(),
@@ -7980,6 +7994,53 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
                 ${showRiskOverview ? renderRiskOverviewModal() : ''}
                 ${showEditEventModal ? renderEditEventModal() : ''}
                 ${showEditJourneyModal ? renderEditJourneyModal() : ''}
+                ${creatingNewJourney ? renderNewJourneyModal() : ''}
+            `;
+        }
+        function renderNewJourneyModal() {
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeNewJourneyModal()">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-2xl w-full m-4 edit-modal" onclick="event.stopPropagation()">
+                        <div class="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between">
+                            <h2 class="text-2xl font-bold text-slate-900">Nova Jornada</h2>
+                            <button onclick="closeNewJourneyModal()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+
+                        <div class="p-6 space-y-4 overflow-y-auto max-h-[calc(85vh-120px)]">
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Nome da Jornada *</label>
+                                <input type="text" id="new-journey-name" placeholder="Ex: Pagamento Digital" class="w-full">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Sigla *</label>
+                                <input type="text" id="new-journey-acronym" placeholder="Ex: PGD" class="w-full">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Status</label>
+                                <select id="new-journey-status" class="w-full">
+                                    <option value="active" selected>Ativa</option>
+                                    <option value="inactive">Inativa</option>
+                                    <option value="discovery">Em Discovery</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Owner/Gestor</label>
+                                <input type="text" id="new-journey-owner" placeholder="Ex: João Silva" class="w-full">
+                            </div>
+                        </div>
+
+                        <div class="flex gap-3 pt-4 border-t border-slate-200 p-6 bg-slate-50">
+                            <button onclick="saveNewJourney()" class="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                <i class="fas fa-plus mr-2"></i> Criar Jornada
+                            </button>
+                            <button onclick="closeNewJourneyModal()" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
+                                <i class="fas fa-times mr-2"></i> Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
             `;
         }
         function renderJourneysExportModal() {
@@ -10226,6 +10287,344 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
                         Esta seção está em construção. Compartilhe requisitos adicionais para priorizarmos a evolução.
                     </div>
                 </main>
+            `;
+        }
+        function renderAlertOverviewModal() {
+            const journey = journeys.find(j => j.id === alertOverviewJourneyId);
+            if (!journey) return '';
+
+            const bounds = getJourneyEventFilterBounds();
+            const alerts = getJourneyAlerts(journey, bounds);
+            const total = alerts.length;
+
+            const severityCounts = alerts.reduce((acc, alert) => {
+                const key = (alert.severity || 'Não informada').trim();
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+            }, {});
+
+            const statusCounts = alerts.reduce((acc, alert) => {
+                const key = (alert.status || 'Não informado').trim();
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+            }, {});
+
+            const sourceCounts = alerts.reduce((acc, alert) => {
+                const key = (alert.source || 'Não informada').trim();
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+            }, {});
+
+            const topEntries = (countsObj, limit = 3) => Object.entries(countsObj)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, limit);
+
+            const topSeverities = topEntries(severityCounts);
+            const topStatuses = topEntries(statusCounts);
+            const topSources = topEntries(sourceCounts);
+
+            const openCount = alerts.filter(a => a.status && !['Fechado', 'Resolvido', 'Encerrado'].includes(a.status)).length;
+            const closedCount = total - openCount;
+
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeAlertOverview()">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                        <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
+                            <div>
+                                <h2 class="text-2xl font-bold text-slate-900">Overview de Alertas</h2>
+                                <p class="text-sm text-slate-600 mt-1">${journey.name} (${journey.acronym})</p>
+                            </div>
+                            <button onclick="closeAlertOverview()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+
+                        <div class="p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
+                            <div class="grid grid-cols-4 gap-4">
+                                <div class="bg-amber-50 rounded-lg p-4 border border-amber-200">
+                                    <p class="text-xs text-amber-600 mb-2 font-semibold">TOTAL DE ALERTAS</p>
+                                    <div class="text-4xl font-bold text-amber-700">${total}</div>
+                                </div>
+                                <div class="bg-green-50 rounded-lg p-4 border border-green-200">
+                                    <p class="text-xs text-green-600 mb-2 font-semibold">FECHADOS</p>
+                                    <div class="text-4xl font-bold text-green-700">${closedCount}</div>
+                                </div>
+                                <div class="bg-red-50 rounded-lg p-4 border border-red-200">
+                                    <p class="text-xs text-red-600 mb-2 font-semibold">ABERTOS</p>
+                                    <div class="text-4xl font-bold text-red-700">${openCount}</div>
+                                </div>
+                                <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                                    <p class="text-xs text-blue-600 mb-2 font-semibold">SEVERIDADE MAIS COMUM</p>
+                                    <div class="text-lg font-bold text-blue-700">${topSeverities.length > 0 ? topSeverities[0][0] : 'N/A'}</div>
+                                    <p class="text-xs text-blue-600 mt-1">${topSeverities.length > 0 ? topSeverities[0][1] : 0} alerta(s)</p>
+                                </div>
+                            </div>
+
+                            ${topSeverities.length > 0 || topStatuses.length > 0 || topSources.length > 0 ? `
+                                <div class="grid grid-cols-3 gap-4">
+                                    ${topSeverities.length > 0 ? `
+                                        <div class="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                                            <h4 class="font-semibold text-yellow-900 mb-3">Severidades Mais Comuns</h4>
+                                            <div class="space-y-2">
+                                                ${topSeverities.map((severity, idx) => `
+                                                    <div class="flex items-center justify-between">
+                                                        <span class="text-sm text-yellow-800">${idx + 1}. ${severity[0]}</span>
+                                                        <span class="px-2 py-1 bg-yellow-200 text-yellow-900 text-xs font-semibold rounded">${severity[1]} alerta(s)</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                    ${topStatuses.length > 0 ? `
+                                        <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                                            <h4 class="font-semibold text-blue-900 mb-3">Status Mais Comuns</h4>
+                                            <div class="space-y-2">
+                                                ${topStatuses.map((status, idx) => `
+                                                    <div class="flex items-center justify-between">
+                                                        <span class="text-sm text-blue-800">${idx + 1}. ${status[0]}</span>
+                                                        <span class="px-2 py-1 bg-blue-200 text-blue-900 text-xs font-semibold rounded">${status[1]} alerta(s)</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                    ${topSources.length > 0 ? `
+                                        <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                                            <h4 class="font-semibold text-purple-900 mb-3">Fontes Mais Comuns</h4>
+                                            <div class="space-y-2">
+                                                ${topSources.map((source, idx) => `
+                                                    <div class="flex items-center justify-between">
+                                                        <span class="text-sm text-purple-800">${idx + 1}. ${source[0]}</span>
+                                                        <span class="px-2 py-1 bg-purple-200 text-purple-900 text-xs font-semibold rounded">${source[1]} alerta(s)</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            ` : ''}
+
+                            <div class="border-t border-slate-200 pt-6">
+                                <h3 class="font-semibold text-slate-900 mb-4">Lista de Alertas</h3>
+                                <div class="space-y-3">
+                                    ${alerts.length > 0 ? alerts.sort((a, b) => {
+                                        const aDate = parseEventDateValue(a.openedAt) ?? 0;
+                                        const bDate = parseEventDateValue(b.openedAt) ?? 0;
+                                        return bDate - aDate;
+                                    }).map(alert => `
+                                        <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                                            <div class="flex items-start justify-between mb-3">
+                                                <div class="flex-1">
+                                                    <h4 class="font-semibold text-slate-900">${alert.alertId || alert.title || 'Alerta sem ID'}</h4>
+                                                    ${alert.title && alert.title !== alert.alertId ? `<p class="text-sm text-slate-600 mt-1">${alert.title}</p>` : ''}
+                                                    ${alert.notes ? `<p class="text-xs text-slate-500 mt-2 whitespace-pre-line">${alert.notes}</p>` : ''}
+                                                </div>
+                                                <div class="flex items-center gap-2">
+                                                    <button onclick="openEditEvent('${journey.id}', '${alert.id}')" class="p-2 hover:bg-blue-100 rounded transition-colors text-blue-600" title="Editar alerta">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button onclick="deleteEvent('${journey.id}', '${alert.id}')" class="p-2 hover:bg-red-100 rounded transition-colors text-red-600" title="Excluir alerta">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="flex flex-wrap items-center gap-2 text-xs font-semibold">
+                                                ${alert.severity ? `<span class="px-2 py-1 rounded bg-amber-200 text-amber-800">${alert.severity}</span>` : ''}
+                                                ${alert.status ? `<span class="px-2 py-1 rounded bg-blue-200 text-blue-800">${alert.status}</span>` : ''}
+                                                ${alert.source ? `<span class="px-2 py-1 rounded bg-purple-200 text-purple-800"><i class="fas fa-source-branch mr-1"></i>${alert.source}</span>` : ''}
+                                                ${alert.openedAt ? `<span class="px-2 py-1 rounded bg-slate-200 text-slate-700"><i class="fas fa-calendar-alt mr-1"></i>${formatDateTimeDisplay(alert.openedAt)}</span>` : ''}
+                                                ${alert.impactedService ? `<span class="px-2 py-1 rounded bg-red-200 text-red-800"><i class="fas fa-server mr-1"></i>${alert.impactedService}</span>` : ''}
+                                                ${alert.owner ? `<span class="px-2 py-1 rounded bg-green-200 text-green-800"><i class="fas fa-user mr-1"></i>${alert.owner}</span>` : ''}
+                                            </div>
+                                            ${alert.url ? `
+                                                <div class="mt-2">
+                                                    <a href="${alert.url}" target="_blank" rel="noopener noreferrer" class="text-xs text-blue-600 hover:text-blue-800">
+                                                        <i class="fas fa-external-link-alt mr-1"></i> Ver referência
+                                                    </a>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    `).join('') : `
+                                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-8 text-center">
+                                            <i class="fas fa-bell-slash text-4xl text-slate-400 mb-4"></i>
+                                            <p class="text-slate-600">Nenhum alerta encontrado para esta jornada no período selecionado.</p>
+                                        </div>
+                                    `}
+                                </div>
+                            </div>
+
+                            <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                <button onclick="closeAlertOverview()" class="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-check mr-2"></i> Fechar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        function renderObsolescenceOverviewModal() {
+            const journey = journeys.find(j => j.id === obsolescenceOverviewJourneyId);
+            if (!journey) return '';
+
+            const bounds = getJourneyEventFilterBounds();
+            const items = getJourneyObsolescenceItems(journey, bounds);
+            const total = items.length;
+
+            const statusCounts = items.reduce((acc, item) => {
+                const key = (item.status || 'Não informado').trim();
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+            }, {});
+
+            const vendorCounts = items.reduce((acc, item) => {
+                const key = (item.vendor || 'Não informado').trim();
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+            }, {});
+
+            const topEntries = (countsObj, limit = 3) => Object.entries(countsObj)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, limit);
+
+            const topStatuses = topEntries(statusCounts);
+            const topVendors = topEntries(vendorCounts);
+
+            const itemsWithEndOfSupport = items.filter(item => item.endOfSupport).length;
+            const itemsNeedingAttention = items.filter(item => {
+                if (!item.endOfSupport) return false;
+                const endDate = parseEventDateValue(item.endOfSupport);
+                if (endDate === null) return false;
+                const now = Date.now();
+                const daysUntilEnd = (endDate - now) / (1000 * 60 * 60 * 24);
+                return daysUntilEnd <= 365; // Próximo ano
+            }).length;
+
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) closeObsolescenceOverview()">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-4xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                        <div class="bg-white border-b border-slate-200 p-6 flex items-center justify-between sticky top-0">
+                            <div>
+                                <h2 class="text-2xl font-bold text-slate-900">Overview de Obsolescência</h2>
+                                <p class="text-sm text-slate-600 mt-1">${journey.name} (${journey.acronym})</p>
+                            </div>
+                            <button onclick="closeObsolescenceOverview()" class="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+
+                        <div class="p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
+                            <div class="grid grid-cols-4 gap-4">
+                                <div class="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                                    <p class="text-xs text-slate-600 mb-2 font-semibold">TOTAL DE ITENS</p>
+                                    <div class="text-4xl font-bold text-slate-700">${total}</div>
+                                </div>
+                                <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                                    <p class="text-xs text-blue-600 mb-2 font-semibold">COM DATA DE FIM</p>
+                                    <div class="text-4xl font-bold text-blue-700">${itemsWithEndOfSupport}</div>
+                                </div>
+                                <div class="bg-orange-50 rounded-lg p-4 border border-orange-200">
+                                    <p class="text-xs text-orange-600 mb-2 font-semibold">REQUEREM ATENÇÃO</p>
+                                    <div class="text-4xl font-bold text-orange-700">${itemsNeedingAttention}</div>
+                                    <p class="text-xs text-orange-600 mt-1">Próximos 12 meses</p>
+                                </div>
+                                <div class="bg-green-50 rounded-lg p-4 border border-green-200">
+                                    <p class="text-xs text-green-600 mb-2 font-semibold">CONCLUÍDOS</p>
+                                    <div class="text-4xl font-bold text-green-700">${items.filter(i => i.status && ['Concluído', 'Resolvido'].includes(i.status)).length}</div>
+                                </div>
+                            </div>
+
+                            ${topStatuses.length > 0 || topVendors.length > 0 ? `
+                                <div class="grid grid-cols-2 gap-4">
+                                    ${topStatuses.length > 0 ? `
+                                        <div class="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                                            <h4 class="font-semibold text-blue-900 mb-3">Status Mais Comuns</h4>
+                                            <div class="space-y-2">
+                                                ${topStatuses.map((status, idx) => `
+                                                    <div class="flex items-center justify-between">
+                                                        <span class="text-sm text-blue-800">${idx + 1}. ${status[0]}</span>
+                                                        <span class="px-2 py-1 bg-blue-200 text-blue-900 text-xs font-semibold rounded">${status[1]} item(ns)</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                    ${topVendors.length > 0 ? `
+                                        <div class="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                                            <h4 class="font-semibold text-purple-900 mb-3">Fornecedores Mais Comuns</h4>
+                                            <div class="space-y-2">
+                                                ${topVendors.map((vendor, idx) => `
+                                                    <div class="flex items-center justify-between">
+                                                        <span class="text-sm text-purple-800">${idx + 1}. ${vendor[0]}</span>
+                                                        <span class="px-2 py-1 bg-purple-200 text-purple-900 text-xs font-semibold rounded">${vendor[1]} item(ns)</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            ` : ''}
+
+                            <div class="border-t border-slate-200 pt-6">
+                                <h3 class="font-semibold text-slate-900 mb-4">Lista de Itens de Obsolescência</h3>
+                                <div class="space-y-3">
+                                    ${items.length > 0 ? items.sort((a, b) => {
+                                        const aDate = parseEventDateValue(a.endOfSupport) ?? 0;
+                                        const bDate = parseEventDateValue(b.endOfSupport) ?? 0;
+                                        return aDate - bDate; // Mais próximos do fim primeiro
+                                    }).map(item => {
+                                        const endDate = parseEventDateValue(item.endOfSupport);
+                                        const isUrgent = endDate !== null && (endDate - Date.now()) / (1000 * 60 * 60 * 24) <= 365;
+                                        return `
+                                        <div class="bg-slate-50 rounded-lg p-4 border border-slate-200 ${isUrgent ? 'border-orange-300 bg-orange-50' : ''}">
+                                            <div class="flex items-start justify-between mb-3">
+                                                <div class="flex-1">
+                                                    <h4 class="font-semibold text-slate-900">${item.component || 'Item sem nome'}</h4>
+                                                    ${item.vendor ? `<p class="text-sm text-slate-600 mt-1"><strong>Fornecedor:</strong> ${item.vendor}</p>` : ''}
+                                                    ${item.impact ? `<p class="text-sm text-slate-600 mt-1"><strong>Impacto:</strong> ${item.impact}</p>` : ''}
+                                                    ${item.notes ? `<p class="text-xs text-slate-500 mt-2 whitespace-pre-line">${item.notes}</p>` : ''}
+                                                </div>
+                                                <div class="flex items-center gap-2">
+                                                    <button onclick="openEditEvent('${journey.id}', '${item.id}')" class="p-2 hover:bg-blue-100 rounded transition-colors text-blue-600" title="Editar item">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button onclick="deleteEvent('${journey.id}', '${item.id}')" class="p-2 hover:bg-red-100 rounded transition-colors text-red-600" title="Excluir item">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div class="flex flex-wrap items-center gap-2 text-xs font-semibold">
+                                                ${item.status ? `<span class="px-2 py-1 rounded bg-blue-200 text-blue-800">${item.status}</span>` : ''}
+                                                ${item.currentVersion ? `<span class="px-2 py-1 rounded bg-slate-200 text-slate-700"><i class="fas fa-tag mr-1"></i>Versão Atual: ${item.currentVersion}</span>` : ''}
+                                                ${item.targetVersion ? `<span class="px-2 py-1 rounded bg-green-200 text-green-800"><i class="fas fa-arrow-up mr-1"></i>Versão Alvo: ${item.targetVersion}</span>` : ''}
+                                                ${item.endOfSupport ? `<span class="px-2 py-1 rounded ${isUrgent ? 'bg-orange-200 text-orange-800' : 'bg-red-200 text-red-800'}"><i class="fas fa-calendar-times mr-1"></i>Fim Suporte: ${formatDateDisplay(item.endOfSupport)}</span>` : ''}
+                                                ${item.owner ? `<span class="px-2 py-1 rounded bg-green-200 text-green-800"><i class="fas fa-user mr-1"></i>${item.owner}</span>` : ''}
+                                            </div>
+                                            ${item.remediationPlan ? `
+                                                <div class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                                                    <p class="text-xs font-semibold text-blue-800 mb-1">Plano de Remediação:</p>
+                                                    <p class="text-xs text-blue-700 whitespace-pre-line">${item.remediationPlan}</p>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    `;
+                                    }).join('') : `
+                                        <div class="bg-slate-50 border border-slate-200 rounded-lg p-8 text-center">
+                                            <i class="fas fa-box-open text-4xl text-slate-400 mb-4"></i>
+                                            <p class="text-slate-600">Nenhum item de obsolescência encontrado para esta jornada no período selecionado.</p>
+                                        </div>
+                                    `}
+                                </div>
+                            </div>
+
+                            <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                <button onclick="closeObsolescenceOverview()" class="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-check mr-2"></i> Fechar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             `;
         }
         function render() {
