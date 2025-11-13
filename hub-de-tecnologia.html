@@ -682,60 +682,9 @@
 const riskBucketOptions = ["Identificação", "Avaliação", "Mitigação", "Monitoramento", "Encerrado"];
 const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
 
-        let fronts = JSON.parse(localStorage.getItem('fronts')) || JSON.parse(JSON.stringify(defaultFronts));
-        let journeys = JSON.parse(localStorage.getItem('journeys')) || JSON.parse(JSON.stringify(defaultJourneys));
-        
-        // Garantir que todas as jornadas tenham o campo owner
-        journeys.forEach(journey => {
-            if (!journey.hasOwnProperty('owner')) {
-                journey.owner = '';
-            }
-        });
-        if (journeys.some(j => !j.hasOwnProperty('owner'))) {
-            saveJourneys();
-        }
-        (function normalizeJourneyEventsData() {
-            let changed = false;
-            journeys.forEach(journey => {
-                if (!journey.events) return;
-                journey.events.forEach(event => {
-                    if (event.category === 'Incidentes') {
-                        event.category = EVENT_CATEGORY_INCIDENT_SERVICE;
-                        changed = true;
-                    }
-                });
-            });
-            if (changed) {
-                saveJourneys();
-            }
-        })();
-        // Migração: Atualizar descrições dos níveis de maturidade das frentes para nomenclatura padronizada
-        (function migrateFrontMaturityLevels() {
-            const targetDescriptions = {
-                1: 'Ad hoc',
-                2: 'Emergente',
-                3: 'Padronizado',
-                4: 'Integrado',
-                5: 'Estratégico'
-            };
-            let changed = false;
-            fronts.forEach(front => {
-                if (!front.maturityLevels || !Array.isArray(front.maturityLevels)) return;
-                front.maturityLevels.forEach(level => {
-                    if (!level || !level.description) return;
-                    const targetDescription = targetDescriptions[level.level];
-                    if (!targetDescription) return;
-                    // Atualiza qualquer descrição que não seja exatamente a nomenclatura padronizada
-                    if (level.description.trim() !== targetDescription) {
-                        level.description = targetDescription;
-                        changed = true;
-                    }
-                });
-            });
-            if (changed) {
-                saveFronts();
-            }
-        })();
+        // Variáveis globais - serão inicializadas pela função initializeData()
+        let fronts = JSON.parse(JSON.stringify(defaultFronts));
+        let journeys = JSON.parse(JSON.stringify(defaultJourneys));
         // Estruturas de dados para OKRs e Indicadores
         const defaultOKRs = [];
         const defaultIndicators = {
@@ -780,31 +729,40 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
             }
         };
         
-        let okrs = JSON.parse(localStorage.getItem('okrs')) || JSON.parse(JSON.stringify(defaultOKRs));
-        let indicators = JSON.parse(localStorage.getItem('indicators')) || JSON.parse(JSON.stringify(defaultIndicators));
+        let okrs = JSON.parse(JSON.stringify(defaultOKRs));
+        let indicators = JSON.parse(JSON.stringify(defaultIndicators));
         
         // Dados para Projetos e Quicks Wins
         const defaultProjects = [];
-        let projects = JSON.parse(localStorage.getItem('projects')) || JSON.parse(JSON.stringify(defaultProjects));
+        let projects = JSON.parse(JSON.stringify(defaultProjects));
         
-        function saveProjects() {
-            localStorage.setItem('projects', JSON.stringify(projects));
+        async function saveProjects() {
+            const result = await saveData('projects', projects);
+            if (result.fallback) {
+                console.warn('Fallback para localStorage ativado ao salvar projects');
+            }
         }
 
         // Dados para Painel Executivo
         const defaultExecutivoPanels = [];
-        let executivoPanels = JSON.parse(localStorage.getItem('executivoPanels')) || JSON.parse(JSON.stringify(defaultExecutivoPanels));
+        let executivoPanels = JSON.parse(JSON.stringify(defaultExecutivoPanels));
         
-        function saveExecutivoPanels() {
-            localStorage.setItem('executivoPanels', JSON.stringify(executivoPanels));
+        async function saveExecutivoPanels() {
+            const result = await saveData('executivoPanels', executivoPanels);
+            if (result.fallback) {
+                console.warn('Fallback para localStorage ativado ao salvar executivoPanels');
+            }
         }
 
         // Sistema de Coleções de Painéis Executivos
         const defaultExecutivoCollections = [];
-        let executivoCollections = JSON.parse(localStorage.getItem('executivoCollections')) || JSON.parse(JSON.stringify(defaultExecutivoCollections));
+        let executivoCollections = JSON.parse(JSON.stringify(defaultExecutivoCollections));
         
-        function saveExecutivoCollections() {
-            localStorage.setItem('executivoCollections', JSON.stringify(executivoCollections));
+        async function saveExecutivoCollections() {
+            const result = await saveData('executivoCollections', executivoCollections);
+            if (result.fallback) {
+                console.warn('Fallback para localStorage ativado ao salvar executivoCollections');
+            }
         }
         
         let currentPage = 'dashboard'; // Dashboard como página padrão
@@ -895,13 +853,154 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
         let editingExecutivoCollectionId = null;
         
         // Estados para Integra
-        let cmdbData = JSON.parse(localStorage.getItem('cmdbData')) || [];
-        let servicenowApiConfig = JSON.parse(localStorage.getItem('servicenowApiConfig')) || {
+        let cmdbData = [];
+        let servicenowApiConfig = {
             instanceUrl: '',
             username: '',
             password: '',
             apiVersion: 'v1'
         };
+        
+        // ========== SISTEMA DE PERSISTÊNCIA CONFIGURÁVEL ==========
+        let persistenceConfig = JSON.parse(localStorage.getItem('persistenceConfig')) || {
+            mode: 'localStorage', // 'localStorage' ou 'database'
+            database: {
+                type: 'postgresql', // 'postgresql', 'mysql', 'mongodb', 'sqlite', 'rest-api'
+                url: '',
+                host: '',
+                port: '',
+                database: '',
+                username: '',
+                password: '',
+                useGateway: false,
+                gatewayUrl: '',
+                gatewayApiKey: '',
+                connectionString: '' // Para casos onde já tem a string completa
+            }
+        };
+        let showPersistenceConfigModal = false;
+        
+        // Função genérica para salvar dados
+        async function saveData(key, data) {
+            if (persistenceConfig.mode === 'localStorage') {
+                localStorage.setItem(key, JSON.stringify(data));
+                return { success: true };
+            } else {
+                return await saveToDatabase(key, data);
+            }
+        }
+        
+        // Função genérica para carregar dados
+        async function loadData(key, defaultValue = null) {
+            if (persistenceConfig.mode === 'localStorage') {
+                const stored = localStorage.getItem(key);
+                return stored ? JSON.parse(stored) : defaultValue;
+            } else {
+                const result = await loadFromDatabase(key);
+                return result !== null ? result : defaultValue;
+            }
+        }
+        
+        // Salvar no banco de dados via API
+        async function saveToDatabase(key, data) {
+            try {
+                const endpoint = persistenceConfig.database.useGateway && persistenceConfig.database.gatewayUrl
+                    ? `${persistenceConfig.database.gatewayUrl}/api/data/${key}`
+                    : `${persistenceConfig.database.url}/api/data/${key}`;
+                
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                
+                if (persistenceConfig.database.useGateway && persistenceConfig.database.gatewayApiKey) {
+                    headers['X-API-Key'] = persistenceConfig.database.gatewayApiKey;
+                } else if (!persistenceConfig.database.useGateway) {
+                    // Se não usar gateway, precisaria autenticação básica ou token
+                    // Por segurança, recomendamos sempre usar gateway
+                    const credentials = btoa(`${persistenceConfig.database.username}:${persistenceConfig.database.password}`);
+                    headers['Authorization'] = `Basic ${credentials}`;
+                }
+                
+                const response = await fetch(endpoint, {
+                    method: 'PUT',
+                    headers: headers,
+                    body: JSON.stringify({ key, data, timestamp: new Date().toISOString() })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Erro ao salvar: ${response.statusText}`);
+                }
+                
+                return { success: true, data: await response.json() };
+            } catch (error) {
+                console.error('Erro ao salvar no banco de dados:', error);
+                // Fallback para localStorage em caso de erro
+                localStorage.setItem(key, JSON.stringify(data));
+                return { success: false, error: error.message, fallback: true };
+            }
+        }
+        
+        // Carregar do banco de dados via API
+        async function loadFromDatabase(key) {
+            try {
+                const endpoint = persistenceConfig.database.useGateway && persistenceConfig.database.gatewayUrl
+                    ? `${persistenceConfig.database.gatewayUrl}/api/data/${key}`
+                    : `${persistenceConfig.database.url}/api/data/${key}`;
+                
+                const headers = {};
+                
+                if (persistenceConfig.database.useGateway && persistenceConfig.database.gatewayApiKey) {
+                    headers['X-API-Key'] = persistenceConfig.database.gatewayApiKey;
+                } else if (!persistenceConfig.database.useGateway) {
+                    const credentials = btoa(`${persistenceConfig.database.username}:${persistenceConfig.database.password}`);
+                    headers['Authorization'] = `Basic ${credentials}`;
+                }
+                
+                const response = await fetch(endpoint, {
+                    method: 'GET',
+                    headers: headers
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        return null; // Chave não existe ainda
+                    }
+                    throw new Error(`Erro ao carregar: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                return result.data || null;
+            } catch (error) {
+                console.error('Erro ao carregar do banco de dados:', error);
+                // Fallback para localStorage em caso de erro
+                const stored = localStorage.getItem(key);
+                return stored ? JSON.parse(stored) : null;
+            }
+        }
+        
+        // Testar conexão com banco de dados
+        async function testDatabaseConnection() {
+            try {
+                const testData = { test: true, timestamp: new Date().toISOString() };
+                const result = await saveToDatabase('_connection_test', testData);
+                
+                if (result.success) {
+                    // Tentar carregar para confirmar
+                    const loaded = await loadFromDatabase('_connection_test');
+                    if (loaded && loaded.test) {
+                        return { success: true, message: 'Conexão com banco de dados estabelecida com sucesso!' };
+                    }
+                }
+                return { success: false, message: 'Erro ao testar conexão' };
+            } catch (error) {
+                return { success: false, message: `Erro: ${error.message}` };
+            }
+        }
+        
+        function savePersistenceConfig() {
+            localStorage.setItem('persistenceConfig', JSON.stringify(persistenceConfig));
+        }
+        
         let showServiceNowApiModal = false;
         let showCMDBImportModal = false;
         let expandedIntegraSections = {}; // Controla seções expandidas
@@ -936,16 +1035,88 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
             );
         }
 
-        function saveUIState() {
+        async function saveUIState() {
             const uiState = {
                 currentPage,
                 filtersExpanded,
                 filters
             };
-            localStorage.setItem('uiState', JSON.stringify(uiState));
+            const result = await saveData('uiState', uiState);
+            if (result.fallback) {
+                console.warn('Fallback para localStorage ativado ao salvar uiState');
+            }
         }
 
-        (function restoreUIState() {
+        // Função para carregar dados iniciais (localStorage ou banco)
+        async function initializeData() {
+            if (persistenceConfig.mode === 'database') {
+                // Modo banco: carregar do banco
+                try {
+                    const loadedFronts = await loadData('fronts', JSON.parse(JSON.stringify(defaultFronts)));
+                    const loadedJourneys = await loadData('journeys', JSON.parse(JSON.stringify(defaultJourneys)));
+                    const loadedOKRs = await loadData('okrs', JSON.parse(JSON.stringify(defaultOKRs)));
+                    const loadedIndicators = await loadData('indicators', JSON.parse(JSON.stringify(defaultIndicators)));
+                    const loadedProjects = await loadData('projects', JSON.parse(JSON.stringify(defaultProjects)));
+                    const loadedExecutivoPanels = await loadData('executivoPanels', JSON.parse(JSON.stringify(defaultExecutivoPanels)));
+                    const loadedExecutivoCollections = await loadData('executivoCollections', JSON.parse(JSON.stringify(defaultExecutivoCollections)));
+                    const loadedCMDBData = await loadData('cmdbData', []);
+                    const loadedServiceNowConfig = await loadData('servicenowApiConfig', {
+                        instanceUrl: '',
+                        username: '',
+                        password: '',
+                        apiVersion: 'v1'
+                    });
+                    const loadedUIState = await loadData('uiState', null);
+                    
+                    // Atualizar variáveis globais
+                    fronts = loadedFronts;
+                    journeys = loadedJourneys;
+                    okrs = loadedOKRs;
+                    indicators = loadedIndicators;
+                    projects = loadedProjects;
+                    executivoPanels = loadedExecutivoPanels;
+                    executivoCollections = loadedExecutivoCollections;
+                    cmdbData = loadedCMDBData;
+                    servicenowApiConfig = loadedServiceNowConfig;
+                    
+                    // Restaurar UI State
+                    if (loadedUIState && typeof loadedUIState === 'object') {
+                        if (loadedUIState.currentPage) currentPage = loadedUIState.currentPage;
+                        if (typeof loadedUIState.filtersExpanded === 'boolean') filtersExpanded = loadedUIState.filtersExpanded;
+                        if (loadedUIState.filters && typeof loadedUIState.filters === 'object') filters = Object.assign(filters, loadedUIState.filters);
+                    }
+                } catch (error) {
+                    console.error('Erro ao carregar dados do banco, usando localStorage como fallback:', error);
+                    // Fallback para localStorage em caso de erro
+                    loadFromLocalStorage();
+                }
+            } else {
+                // Modo localStorage: carregar normalmente
+                loadFromLocalStorage();
+            }
+            
+            // Normalizações e migrações (executam independente do modo)
+            normalizeData();
+        }
+        
+        // Função auxiliar para carregar do localStorage
+        function loadFromLocalStorage() {
+            fronts = JSON.parse(localStorage.getItem('fronts')) || JSON.parse(JSON.stringify(defaultFronts));
+            journeys = JSON.parse(localStorage.getItem('journeys')) || JSON.parse(JSON.stringify(defaultJourneys));
+            okrs = JSON.parse(localStorage.getItem('okrs')) || JSON.parse(JSON.stringify(defaultOKRs));
+            indicators = JSON.parse(localStorage.getItem('indicators')) || JSON.parse(JSON.stringify(defaultIndicators));
+            projects = JSON.parse(localStorage.getItem('projects')) || JSON.parse(JSON.stringify(defaultProjects));
+            executivoPanels = JSON.parse(localStorage.getItem('executivoPanels')) || JSON.parse(JSON.stringify(defaultExecutivoPanels));
+            executivoCollections = JSON.parse(localStorage.getItem('executivoCollections')) || JSON.parse(JSON.stringify(defaultExecutivoCollections));
+            cmdbData = JSON.parse(localStorage.getItem('cmdbData')) || [];
+            servicenowApiConfig = JSON.parse(localStorage.getItem('servicenowApiConfig')) || {
+                instanceUrl: '',
+                username: '',
+                password: '',
+                apiVersion: 'v1'
+            };
+            
+            // Restaurar UI State
             try {
                 const saved = JSON.parse(localStorage.getItem('uiState'));
                 if (saved && typeof saved === 'object') {
@@ -954,30 +1125,105 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
                     if (saved.filters && typeof saved.filters === 'object') filters = Object.assign(filters, saved.filters);
                 }
             } catch (e) {}
-        })();
-
-        function saveFronts() {
-            localStorage.setItem('fronts', JSON.stringify(fronts));
+        }
+        
+        // Função para normalizar dados após carregamento
+        function normalizeData() {
+            // Garantir que todas as jornadas tenham o campo owner
+            journeys.forEach(journey => {
+                if (!journey.hasOwnProperty('owner')) {
+                    journey.owner = '';
+                }
+            });
+            if (journeys.some(j => !j.hasOwnProperty('owner'))) {
+                saveJourneys();
+            }
+            
+            // Normalizar eventos de jornadas
+            (function normalizeJourneyEventsData() {
+                let changed = false;
+                journeys.forEach(journey => {
+                    if (!journey.events) return;
+                    journey.events.forEach(event => {
+                        if (event.category === 'Incidentes') {
+                            event.category = EVENT_CATEGORY_INCIDENT_SERVICE;
+                            changed = true;
+                        }
+                    });
+                });
+                if (changed) {
+                    saveJourneys();
+                }
+            })();
+            
+            // Migração: Atualizar descrições dos níveis de maturidade das frentes
+            (function migrateFrontMaturityLevels() {
+                const targetDescriptions = {
+                    1: 'Ad hoc',
+                    2: 'Emergente',
+                    3: 'Padronizado',
+                    4: 'Integrado',
+                    5: 'Estratégico'
+                };
+                let changed = false;
+                fronts.forEach(front => {
+                    if (!front.maturityLevels || !Array.isArray(front.maturityLevels)) return;
+                    front.maturityLevels.forEach(level => {
+                        if (!level || !level.description) return;
+                        const targetDescription = targetDescriptions[level.level];
+                        if (!targetDescription) return;
+                        if (level.description.trim() !== targetDescription) {
+                            level.description = targetDescription;
+                            changed = true;
+                        }
+                    });
+                });
+                if (changed) {
+                    saveFronts();
+                }
+            })();
         }
 
-        function saveJourneys() {
-            localStorage.setItem('journeys', JSON.stringify(journeys));
+        async function saveFronts() {
+            const result = await saveData('fronts', fronts);
+            if (result.fallback) {
+                console.warn('Fallback para localStorage ativado ao salvar fronts');
+            }
         }
 
-        function saveOKRs() {
-            localStorage.setItem('okrs', JSON.stringify(okrs));
+        async function saveJourneys() {
+            const result = await saveData('journeys', journeys);
+            if (result.fallback) {
+                console.warn('Fallback para localStorage ativado ao salvar journeys');
+            }
         }
 
-        function saveIndicators() {
-            localStorage.setItem('indicators', JSON.stringify(indicators));
+        async function saveOKRs() {
+            const result = await saveData('okrs', okrs);
+            if (result.fallback) {
+                console.warn('Fallback para localStorage ativado ao salvar okrs');
+            }
         }
 
-        function saveCMDBData() {
-            localStorage.setItem('cmdbData', JSON.stringify(cmdbData));
+        async function saveIndicators() {
+            const result = await saveData('indicators', indicators);
+            if (result.fallback) {
+                console.warn('Fallback para localStorage ativado ao salvar indicators');
+            }
         }
 
-        function saveServiceNowApiConfig() {
-            localStorage.setItem('servicenowApiConfig', JSON.stringify(servicenowApiConfig));
+        async function saveCMDBData() {
+            const result = await saveData('cmdbData', cmdbData);
+            if (result.fallback) {
+                console.warn('Fallback para localStorage ativado ao salvar cmdbData');
+            }
+        }
+
+        async function saveServiceNowApiConfig() {
+            const result = await saveData('servicenowApiConfig', servicenowApiConfig);
+            if (result.fallback) {
+                console.warn('Fallback para localStorage ativado ao salvar servicenowApiConfig');
+            }
         }
 
         function countIncidents(journeyId) {
@@ -3416,6 +3662,7 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
             if (showingTasksModal) { showingTasksModal = null; changed = true; }
             if (editingTaskIndex !== null) { editingTaskIndex = null; changed = true; }
             if (showingTaskForm) { showingTaskForm = false; changed = true; }
+            if (showPersistenceConfigModal) { showPersistenceConfigModal = false; changed = true; }
             if (changed) render();
         }
         function getFilteredFronts() {
@@ -4181,6 +4428,92 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
                 </header>
                 <main class="max-w-4xl mx-auto px-6 py-8 space-y-8">
                     <section class="bg-white rounded-lg shadow-md border-2 border-slate-200 p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div>
+                                <h2 class="text-2xl font-bold text-slate-900 mb-2">Sistema de Persistência de Dados</h2>
+                                <p class="text-sm text-slate-600">
+                                    Configure como os dados são armazenados: localStorage (padrão) ou banco de dados centralizado.
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span class="px-3 py-1 rounded-full text-xs font-semibold ${persistenceConfig.mode === 'localStorage' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}">
+                                    ${persistenceConfig.mode === 'localStorage' ? 'LocalStorage' : 'Banco de Dados'}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <div class="flex items-center gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                <label class="flex items-center gap-3 cursor-pointer flex-1">
+                                    <input type="radio" name="persistence-mode" value="localStorage" ${persistenceConfig.mode === 'localStorage' ? 'checked' : ''} onchange="persistenceConfig.mode = 'localStorage'; savePersistenceConfig(); render();" class="w-5 h-5">
+                                    <div>
+                                        <span class="font-semibold text-slate-900">LocalStorage (Padrão)</span>
+                                        <p class="text-xs text-slate-600">Dados salvos localmente no navegador. Cada usuário mantém seus próprios dados.</p>
+                                    </div>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center gap-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                <label class="flex items-center gap-3 cursor-pointer flex-1">
+                                    <input type="radio" name="persistence-mode" value="database" ${persistenceConfig.mode === 'database' ? 'checked' : ''} onchange="persistenceConfig.mode = 'database'; savePersistenceConfig(); render();" class="w-5 h-5">
+                                    <div>
+                                        <span class="font-semibold text-slate-900">Banco de Dados Centralizado</span>
+                                        <p class="text-xs text-slate-600">Dados salvos em banco de dados compartilhado. Requer configuração de administrador.</p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        ${persistenceConfig.mode === 'database' ? `
+                            <div class="mt-6 pt-6 border-t border-slate-200">
+                                <div class="flex items-center justify-between mb-4">
+                                    <h3 class="text-lg font-semibold text-slate-900">Configuração do Banco de Dados</h3>
+                                    <button onclick="showPersistenceConfigModal = true; render();" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white font-semibold rounded transition-colors text-sm">
+                                        <i class="fas fa-cog mr-2"></i> Configurar
+                                    </button>
+                                </div>
+                                
+                                ${persistenceConfig.database.url || persistenceConfig.database.gatewayUrl ? `
+                                    <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                                        <div class="flex items-start gap-3">
+                                            <i class="fas fa-check-circle text-green-600 text-xl mt-1"></i>
+                                            <div class="flex-1">
+                                                <h4 class="font-semibold text-green-900 mb-1">Configuração Ativa</h4>
+                                                <p class="text-sm text-green-800">
+                                                    ${persistenceConfig.database.useGateway ? 'Gateway' : 'Banco de Dados'} configurado: 
+                                                    ${persistenceConfig.database.useGateway ? persistenceConfig.database.gatewayUrl : persistenceConfig.database.url || `${persistenceConfig.database.host}:${persistenceConfig.database.port}`}
+                                                </p>
+                                                <p class="text-xs text-green-700 mt-2">
+                                                    Tipo: ${persistenceConfig.database.type || 'Não especificado'} | 
+                                                    ${persistenceConfig.database.useGateway ? 'Gateway ativo' : 'Conexão direta'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ` : `
+                                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                                        <div class="flex items-start gap-3">
+                                            <i class="fas fa-exclamation-triangle text-yellow-600 text-xl mt-1"></i>
+                                            <div class="flex-1">
+                                                <h4 class="font-semibold text-yellow-900 mb-1">Configuração Necessária</h4>
+                                                <p class="text-sm text-yellow-800">
+                                                    Configure a conexão com o banco de dados para ativar o modo centralizado.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `}
+                                
+                                <div class="mt-4 flex gap-3">
+                                    <button onclick="testDatabaseConnection().then(result => alert(result.message))" class="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded transition-colors text-sm">
+                                        <i class="fas fa-plug mr-2"></i> Testar Conexão
+                                    </button>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </section>
+                    
+                    <section class="bg-white rounded-lg shadow-md border-2 border-slate-200 p-6">
                         <h2 class="text-2xl font-bold text-slate-900 mb-2">Backup e Restauração</h2>
                         <p class="text-sm text-slate-600 mb-4">
                             Faça o download completo dos dados atuais ou restaure um arquivo previamente exportado.
@@ -4216,7 +4549,152 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
                         </p>
                     </section>
                 </main>
+                
+                ${showPersistenceConfigModal ? renderPersistenceConfigModal() : ''}
             `;
+        }
+        
+        function renderPersistenceConfigModal() {
+            return `
+                <div class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center overflow-auto modal-overlay" onclick="if(event.target === this) { showPersistenceConfigModal = false; render(); }">
+                    <div class="bg-white rounded-lg shadow-2xl max-w-3xl w-full m-4 modal-panel" onclick="event.stopPropagation()">
+                        <div class="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between">
+                            <div>
+                                <h2 class="text-2xl font-bold text-slate-900">Configuração de Banco de Dados</h2>
+                                <p class="text-sm text-slate-600 mt-1">Configure a conexão com o banco de dados centralizado</p>
+                            </div>
+                            <button onclick="showPersistenceConfigModal = false; render();" class="p-2 hover:bg-slate-100 rounded-lg transition-colors">
+                                <i class="fas fa-times text-slate-600 text-xl"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="p-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
+                            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-800 text-sm">
+                                <p class="font-semibold mb-2"><i class="fas fa-info-circle mr-2"></i>Importante</p>
+                                <ul class="list-disc list-inside space-y-1 text-xs">
+                                    <li>Recomendamos usar um Gateway/API para proteger credenciais</li>
+                                    <li>O sistema fará fallback automático para localStorage em caso de erro</li>
+                                    <li>Certifique-se de que a API suporta os endpoints: GET/PUT /api/data/{key}</li>
+                                </ul>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-semibold text-slate-700 mb-2">Tipo de Banco de Dados</label>
+                                <select id="db-type" class="w-full" onchange="persistenceConfig.database.type = this.value; render();">
+                                    <option value="postgresql" ${persistenceConfig.database.type === 'postgresql' ? 'selected' : ''}>PostgreSQL</option>
+                                    <option value="mysql" ${persistenceConfig.database.type === 'mysql' ? 'selected' : ''}>MySQL</option>
+                                    <option value="mongodb" ${persistenceConfig.database.type === 'mongodb' ? 'selected' : ''}>MongoDB</option>
+                                    <option value="sqlite" ${persistenceConfig.database.type === 'sqlite' ? 'selected' : ''}>SQLite</option>
+                                    <option value="rest-api" ${persistenceConfig.database.type === 'rest-api' ? 'selected' : ''}>REST API (Genérico)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="flex items-center gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                <input type="checkbox" id="use-gateway" ${persistenceConfig.database.useGateway ? 'checked' : ''} onchange="persistenceConfig.database.useGateway = this.checked; render();" class="w-5 h-5">
+                                <label for="use-gateway" class="flex-1 cursor-pointer">
+                                    <span class="font-semibold text-slate-900">Usar Gateway/API (Recomendado)</span>
+                                    <p class="text-xs text-slate-600 mt-1">Protege credenciais usando uma API intermediária com autenticação por chave</p>
+                                </label>
+                            </div>
+                            
+                            ${persistenceConfig.database.useGateway ? `
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">URL do Gateway/API *</label>
+                                        <input type="url" id="gateway-url" placeholder="https://api.exemplo.com" value="${persistenceConfig.database.gatewayUrl || ''}" class="w-full">
+                                        <p class="text-xs text-slate-500 mt-1">URL base da API Gateway (ex: https://api.exemplo.com)</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Chave de API (API Key) *</label>
+                                        <input type="password" id="gateway-api-key" placeholder="Sua chave de API" value="${persistenceConfig.database.gatewayApiKey || ''}" class="w-full">
+                                        <p class="text-xs text-slate-500 mt-1">Chave fornecida pelo administrador do gateway</p>
+                                    </div>
+                                </div>
+                            ` : `
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">URL Completa da API (Opcional)</label>
+                                        <input type="url" id="db-url" placeholder="https://api.exemplo.com/api" value="${persistenceConfig.database.url || ''}" class="w-full">
+                                        <p class="text-xs text-slate-500 mt-1">Ou configure host, porta e database abaixo</p>
+                                    </div>
+                                    
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-semibold text-slate-700 mb-2">Host</label>
+                                            <input type="text" id="db-host" placeholder="localhost" value="${persistenceConfig.database.host || ''}" class="w-full">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-semibold text-slate-700 mb-2">Porta</label>
+                                            <input type="text" id="db-port" placeholder="5432" value="${persistenceConfig.database.port || ''}" class="w-full">
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">Nome do Banco de Dados</label>
+                                        <input type="text" id="db-database" placeholder="hub_tecnologia" value="${persistenceConfig.database.database || ''}" class="w-full">
+                                    </div>
+                                    
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label class="block text-sm font-semibold text-slate-700 mb-2">Usuário</label>
+                                            <input type="text" id="db-username" placeholder="usuario" value="${persistenceConfig.database.username || ''}" class="w-full">
+                                        </div>
+                                        <div>
+                                            <label class="block text-sm font-semibold text-slate-700 mb-2">Senha</label>
+                                            <input type="password" id="db-password" placeholder="senha" value="${persistenceConfig.database.password || ''}" class="w-full">
+                                        </div>
+                                    </div>
+                                    
+                                    <div>
+                                        <label class="block text-sm font-semibold text-slate-700 mb-2">String de Conexão (Alternativa)</label>
+                                        <input type="text" id="db-connection-string" placeholder="postgresql://user:pass@host:port/db" value="${persistenceConfig.database.connectionString || ''}" class="w-full">
+                                        <p class="text-xs text-slate-500 mt-1">String de conexão completa (substitui campos acima se preenchida)</p>
+                                    </div>
+                                </div>
+                            `}
+                            
+                            <div class="flex gap-3 pt-4 border-t border-slate-200">
+                                <button onclick="savePersistenceConfigFromModal()" class="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-semibold rounded transition-colors">
+                                    <i class="fas fa-save mr-2"></i> Salvar Configuração
+                                </button>
+                                <button onclick="showPersistenceConfigModal = false; render();" class="flex-1 px-4 py-2 bg-slate-300 hover:bg-slate-400 text-slate-700 font-semibold rounded transition-colors">
+                                    <i class="fas fa-times mr-2"></i> Cancelar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function savePersistenceConfigFromModal() {
+            if (persistenceConfig.database.useGateway) {
+                persistenceConfig.database.gatewayUrl = document.getElementById('gateway-url').value.trim();
+                persistenceConfig.database.gatewayApiKey = document.getElementById('gateway-api-key').value.trim();
+                
+                if (!persistenceConfig.database.gatewayUrl || !persistenceConfig.database.gatewayApiKey) {
+                    alert('Preencha a URL do Gateway e a Chave de API!');
+                    return;
+                }
+            } else {
+                persistenceConfig.database.url = document.getElementById('db-url').value.trim();
+                persistenceConfig.database.host = document.getElementById('db-host').value.trim();
+                persistenceConfig.database.port = document.getElementById('db-port').value.trim();
+                persistenceConfig.database.database = document.getElementById('db-database').value.trim();
+                persistenceConfig.database.username = document.getElementById('db-username').value.trim();
+                persistenceConfig.database.password = document.getElementById('db-password').value.trim();
+                persistenceConfig.database.connectionString = document.getElementById('db-connection-string').value.trim();
+                
+                if (!persistenceConfig.database.url && !persistenceConfig.database.connectionString && (!persistenceConfig.database.host || !persistenceConfig.database.database)) {
+                    alert('Preencha a URL completa OU configure Host, Porta e Database!');
+                    return;
+                }
+            }
+            
+            savePersistenceConfig();
+            showPersistenceConfigModal = false;
+            render();
+            alert('Configuração salva com sucesso! Use o botão "Testar Conexão" para verificar.');
         }
         function renderFrontsPage() {
             const filteredFronts = getFilteredFronts();
@@ -10665,8 +11143,11 @@ const riskPriorityOptions = ["Critical", "High", "Medium", "Low"];
             }
         }
 
-        render();
+        // Inicializar dados e renderizar
+        (async function() {
+            await initializeData();
+            render();
+        })();
     </script>
 </body>
 </html>
-         function renderRiskOverviewModal() {
